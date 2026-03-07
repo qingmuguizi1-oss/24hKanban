@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tencent CloudBase Data Synchronization"
+  short_description: "Reliable multi-device sync on Tencent CloudBase."
+  default_prompt: "Use $tencent-cloudbase-data-synchronization to implement robust CloudBase sync with anonymous auth, soft deletes, and deterministic merge logic."

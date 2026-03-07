@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tencent CloudBase Passwordless Auth"
+  short_description: "CloudBase email code auth with safe state checks."
+  default_prompt: "Use $tencent-cloudbase-passwordless-auth to implement Tencent CloudBase email verification code login with strict auth-state safety checks."

@@ -53,8 +53,11 @@ const state = {
   pieDefaultCenterText: "\u6682\u65E0\u8BB0\u5F55",
   pieActiveIndex: -1,
   collapsedById: {},
-  doneGroupCollapsed: Object.fromEntries(
-    DONE_TIME_GROUPS.map((group) => [group.key, true])
+  boardGroupCollapsed: Object.fromEntries(
+    Object.keys(STATUS_COLUMNS).map((status) => [
+      status,
+      Object.fromEntries(DONE_TIME_GROUPS.map((group) => [group.key, true]))
+    ])
   )
 };
 
@@ -454,8 +457,11 @@ function renderBoard() {
   });
 
   const statusCount = { todo: 0, doing: 0, done: 0 };
-  const doneGroups = Object.fromEntries(
-    DONE_TIME_GROUPS.map((group) => [group.key, []])
+  const groupedTasksByStatus = Object.fromEntries(
+    Object.keys(STATUS_COLUMNS).map((status) => [
+      status,
+      Object.fromEntries(DONE_TIME_GROUPS.map((group) => [group.key, []]))
+    ])
   );
   const sortedTasks = [...state.tasks]
     .filter((task) => isTaskInDate(task, state.boardDate))
@@ -469,51 +475,33 @@ function renderBoard() {
 
   sortedTasks.forEach((task) => {
     const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, task.status) ? task.status : "todo";
-    const columnId = STATUS_COLUMNS[status];
-    const column = document.getElementById(columnId);
-
-    if (status === "done") {
-      const groupKey = getTaskTimeGroup(task, state.boardDate);
-      doneGroups[groupKey].push(task);
-    } else {
-      column.appendChild(createTaskCard(task));
-    }
+    const groupKey = getTaskTimeGroup(task, state.boardDate);
+    groupedTasksByStatus[status][groupKey].push(task);
 
     statusCount[status] += 1;
   });
 
-  renderDoneTimeGroups(document.getElementById(STATUS_COLUMNS.done), doneGroups);
+  Object.entries(STATUS_COLUMNS).forEach(([status, columnId]) => {
+    const column = document.getElementById(columnId);
+    renderTimeGroupsByStatus(column, status, groupedTasksByStatus[status]);
+  });
 
   refs.countTodo.textContent = String(statusCount.todo);
   refs.countDoing.textContent = String(statusCount.doing);
   refs.countDone.textContent = String(statusCount.done);
-
-  Object.entries(STATUS_COLUMNS).forEach(([status, columnId]) => {
-    if (status === "done") {
-      return;
-    }
-
-    const column = document.getElementById(columnId);
-    if (!column.children.length) {
-      const empty = document.createElement("div");
-      empty.className = "empty-column";
-      empty.textContent = "\u6682\u65E0\u4EFB\u52A1";
-      column.appendChild(empty);
-    }
-  });
 }
 
-function renderDoneTimeGroups(column, groupedTasks) {
+function renderTimeGroupsByStatus(column, status, groupedTasks) {
   DONE_TIME_GROUPS.forEach((group) => {
     const count = groupedTasks[group.key].length;
-    const isCollapsed = getDoneTimeGroupCollapsed(group.key);
+    const isCollapsed = getBoardTimeGroupCollapsed(status, group.key);
 
     const section = document.createElement("section");
     section.className = "done-time-group";
 
     const list = document.createElement("div");
     list.className = "done-time-list";
-    list.id = `done-time-list-${group.key}`;
+    list.id = `time-list-${status}-${group.key}`;
     list.hidden = isCollapsed;
     if (!count) {
       const empty = document.createElement("div");
@@ -535,8 +523,8 @@ function renderDoneTimeGroups(column, groupedTasks) {
     toggle.setAttribute("aria-controls", list.id);
     applyDoneTimeGroupCollapsedState(toggle, isCollapsed, group.label, count);
     toggle.addEventListener("click", () => {
-      const next = !getDoneTimeGroupCollapsed(group.key);
-      state.doneGroupCollapsed[group.key] = next;
+      const next = !getBoardTimeGroupCollapsed(status, group.key);
+      state.boardGroupCollapsed[status][group.key] = next;
       applyDoneTimeGroupCollapsedState(toggle, next, group.label, count);
       list.hidden = next;
     });
@@ -549,11 +537,17 @@ function renderDoneTimeGroups(column, groupedTasks) {
   });
 }
 
-function getDoneTimeGroupCollapsed(groupKey) {
-  if (!Object.prototype.hasOwnProperty.call(state.doneGroupCollapsed, groupKey)) {
-    state.doneGroupCollapsed[groupKey] = true;
+function getBoardTimeGroupCollapsed(status, groupKey) {
+  const safeStatus = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, status) ? status : "todo";
+  if (!Object.prototype.hasOwnProperty.call(state.boardGroupCollapsed, safeStatus)) {
+    state.boardGroupCollapsed[safeStatus] = Object.fromEntries(
+      DONE_TIME_GROUPS.map((group) => [group.key, true])
+    );
   }
-  return state.doneGroupCollapsed[groupKey];
+  if (!Object.prototype.hasOwnProperty.call(state.boardGroupCollapsed[safeStatus], groupKey)) {
+    state.boardGroupCollapsed[safeStatus][groupKey] = true;
+  }
+  return state.boardGroupCollapsed[safeStatus][groupKey];
 }
 
 function applyDoneTimeGroupCollapsedState(toggleButton, isCollapsed, label, count) {
