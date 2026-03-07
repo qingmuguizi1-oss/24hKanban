@@ -626,6 +626,268 @@ button.danger {
   display: none !important;
 }
 
+.global-menu {
+  position: fixed;
+  top: 16px;
+  right: 18px;
+  z-index: 40;
+  width: max-content;
+}
+
+#menu-toggle-btn {
+  min-width: 72px;
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  margin-top: 0;
+  width: min(252px, 80vw);
+  border: 1px solid rgba(162, 152, 137, 0.28);
+  border-radius: 16px;
+  background: rgba(245, 244, 241, 0.98);
+  box-shadow: 0 14px 30px rgba(35, 32, 27, 0.2);
+  padding: 8px 0;
+  display: grid;
+  gap: 0;
+}
+
+.menu-account-block {
+  padding: 10px 14px 12px;
+}
+
+.menu-account-label {
+  margin: 0;
+  color: #727782;
+  font-size: 0.86rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.menu-account-value {
+  margin: 6px 0 0;
+  color: #1e2b3e;
+  font-size: 1.08rem;
+  font-weight: 700;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(167, 167, 167, 0.3);
+  margin: 0 0 4px;
+}
+
+.menu-action-btn {
+  margin: 0 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #39414f;
+  box-shadow: none;
+  text-align: left;
+  padding: 9px 10px;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 600;
+}
+
+.menu-action-btn:hover {
+  background: rgba(216, 221, 230, 0.45);
+}
+
+.menu-action-btn.is-danger {
+  color: #e34545;
+}
+
+.menu-action-btn.is-danger:hover {
+  background: rgba(255, 227, 227, 0.75);
+}
+
+.login-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(57, 37, 23, 0.33);
+  backdrop-filter: blur(2px);
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 20px 14px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+}
+
+.login-quote-wrap {
+  width: min(560px, 92vw);
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.login-logo-shell {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  border: 1px solid rgba(157, 115, 75, 0.34);
+  background: rgba(255, 248, 234, 0.92);
+  box-shadow: 0 8px 22px rgba(121, 86, 49, 0.14);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.login-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.login-logo-fallback {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 2px dashed rgba(172, 89, 37, 0.56);
+  color: #9f5e34;
+  display: grid;
+  place-items: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.daily-quote-text {
+  margin: 0;
+  color: #5b4330;
+  line-height: 1.62;
+  font-size: 1rem;
+  min-height: 52px;
+}
+
+.daily-quote-source {
+  margin: 0;
+  color: #846752;
+  font-size: 0.88rem;
+}
+
+.login-card {
+  position: relative;
+  width: min(460px, 92vw);
+  border: 1px solid rgba(160, 117, 74, 0.36);
+  border-radius: 18px;
+  background: linear-gradient(165deg, rgba(255, 248, 233, 0.93), rgba(247, 233, 208, 0.89));
+  box-shadow: 0 16px 34px rgba(121, 86, 49, 0.16);
+  padding: 24px;
+}
+
+.login-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.login-head {
+  text-align: center;
+  margin-bottom: 18px;
+  padding-right: 34px;
+}
+
+.login-head h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  color: #4b2f1d;
+}
+
+.login-head p {
+  margin: 6px 0 0;
+  color: #7c634d;
+  font-size: 0.91rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.92rem;
+  color: #614734;
+}
+
+.login-input-wrap {
+  position: relative;
+}
+
+.login-mail-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8b6f57;
+  pointer-events: none;
+}
+
+#login-email {
+  padding-left: 34px;
+}
+
+#login-code {
+  letter-spacing: 0.2em;
+  text-align: center;
+  font-family: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+}
+
+.login-message {
+  border-radius: 10px;
+  border: 1px solid rgba(167, 120, 75, 0.28);
+  background: rgba(241, 229, 208, 0.65);
+  color: #6e543f;
+  padding: 9px 10px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.login-message.is-error {
+  border-color: rgba(166, 68, 57, 0.42);
+  background: rgba(246, 218, 212, 0.72);
+  color: #8f2f28;
+}
+
+.login-message.is-success {
+  border-color: rgba(62, 129, 74, 0.38);
+  background: rgba(218, 240, 222, 0.78);
+  color: #216d34;
+}
+
+.login-actions {
+  display: grid;
+  gap: 8px;
+}
+
+#login-auth-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.login-footnote {
+  margin-top: 16px;
+  text-align: center;
+  color: #866b54;
+  font-size: 0.8rem;
+}
+
 .board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -889,6 +1151,15 @@ button.danger {
   .app-header p {
     font-size: 0.95rem;
   }
+
+  .login-page {
+    padding: 24px 16px;
+  }
+
+  .global-menu {
+    top: 12px;
+    right: 14px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -950,6 +1221,30 @@ button.danger {
 
   .legend-item {
     font-size: 0.82rem;
+  }
+
+  .login-page {
+    padding: 20px 12px;
+    gap: 14px;
+  }
+
+  .login-card {
+    padding: 18px;
+  }
+
+  .login-logo-shell {
+    width: 92px;
+    height: 92px;
+  }
+
+  .daily-quote-text {
+    min-height: 42px;
+    font-size: 0.94rem;
+  }
+
+  #menu-toggle-btn {
+    min-width: 64px;
+    padding: 8px 11px;
   }
 }
 

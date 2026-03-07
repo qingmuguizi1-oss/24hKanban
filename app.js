@@ -1,4 +1,25 @@
-﻿const STORAGE_KEY = "time-efficiency-tasks-v1";
+const STORAGE_KEY = "time-efficiency-tasks-v1";
+
+const CLOUDBASE_ENV_ID = "jieyou-3gr01mvob9ad92de";
+const CODE_RESEND_SECONDS = 60;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CLOUDBASE_SDK_URLS = [
+  "https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js",
+  "https://imgcache.qq.com/qcloud/tcbjs/1.6.7/tcb.js"
+];
+
+const DAILY_QUOTES = [
+  { text: "\u957f\u98ce\u7834\u6d6a\u4f1a\u6709\u65f6\uff0c\u76f4\u6302\u4e91\u5e06\u6d4e\u6ca7\u6d77\u3002", source: "\u674e\u767d\u300a\u884c\u8def\u96be\u300b" },
+  { text: "\u4e24\u5cb8\u733f\u58f0\u557c\u4e0d\u4f4f\uff0c\u8f7b\u821f\u5df2\u8fc7\u4e07\u91cd\u5c71\u3002", source: "\u674e\u767d\u300a\u65e9\u53d1\u767d\u5e1d\u57ce\u300b" },
+  { text: "\u4f1a\u5f53\u51cc\u7edd\u9876\uff0c\u4e00\u89c8\u4f17\u5c71\u5c0f\u3002", source: "\u675c\u752b\u300a\u671b\u5cb3\u300b" },
+  { text: "\u5343\u78e8\u4e07\u51fb\u8fd8\u575a\u52b2\uff0c\u4efb\u5c14\u4e1c\u897f\u5357\u5317\u98ce\u3002", source: "\u90d1\u71ee\u300a\u7af9\u77f3\u300b" },
+  { text: "\u8def\u6f2b\u6f2b\u5176\u4fee\u8fdc\u516e\uff0c\u543e\u5c06\u4e0a\u4e0b\u800c\u6c42\u7d22\u3002", source: "\u5c48\u539f\u300a\u79bb\u9a9a\u300b" },
+  { text: "\u5929\u884c\u5065\uff0c\u541b\u5b50\u4ee5\u81ea\u5f3a\u4e0d\u606f\u3002", source: "\u300a\u5468\u6613\u300b" },
+  { text: "\u5c71\u91cd\u6c34\u590d\u7591\u65e0\u8def\uff0c\u67f3\u6697\u82b1\u660e\u53c8\u4e00\u6751\u3002", source: "\u9646\u6e38\u300a\u6e38\u5c71\u897f\u6751\u300b" },
+  { text: "\u83ab\u542c\u7a7f\u6797\u6253\u53f6\u58f0\uff0c\u4f55\u59a8\u541f\u5578\u4e14\u5f90\u884c\u3002", source: "\u82cf\u8f7c\u300a\u5b9a\u98ce\u6ce2\u300b" },
+  { text: "\u4e16\u4e0a\u65e0\u96be\u4e8b\uff0c\u53ea\u8981\u80af\u767b\u6500\u3002", source: "\u6bdb\u6cfd\u4e1c" },
+  { text: "\u7eb5\u6709\u75be\u98ce\u8d77\uff0c\u4eba\u751f\u4e0d\u8a00\u5f03\u3002", source: "\u4f5a\u540d" }
+];
 
 const PRIORITY_MAP = {
   important_urgent: "\uD83D\uDD25 \u91CD\u8981\u4E14\u7D27\u6025",
@@ -98,6 +119,41 @@ const refs = {
   template: document.getElementById("task-card-template")
 };
 
+const authRefs = {
+  loginPage: document.getElementById("login-page"),
+  mainApp: document.getElementById("main-app"),
+  menuWrap: document.getElementById("global-menu"),
+  menuToggleBtn: document.getElementById("menu-toggle-btn"),
+  menuDropdown: document.getElementById("menu-dropdown"),
+  menuAuthBtn: document.getElementById("menu-auth-btn"),
+  menuAccountValue: document.getElementById("menu-account-value"),
+  loginCloseBtn: document.getElementById("login-close-btn"),
+  loginLogo: document.getElementById("login-logo"),
+  loginLogoFallback: document.getElementById("login-logo-fallback"),
+  quoteText: document.getElementById("daily-quote-text"),
+  quoteSource: document.getElementById("daily-quote-source"),
+  loginForm: document.getElementById("login-form"),
+  emailInput: document.getElementById("login-email"),
+  codeField: document.getElementById("login-code-field"),
+  codeInput: document.getElementById("login-code"),
+  message: document.getElementById("login-message"),
+  sendBtn: document.getElementById("login-send-btn"),
+  authActions: document.getElementById("login-auth-actions"),
+  submitBtn: document.getElementById("login-submit-btn"),
+  resendBtn: document.getElementById("login-resend-btn")
+};
+
+const authState = {
+  app: null,
+  auth: null,
+  user: null,
+  verificationContext: null,
+  isLoading: false,
+  codeSent: false,
+  countdown: 0,
+  countdownTimerId: null
+};
+
 init();
 
 function init() {
@@ -145,6 +201,486 @@ function init() {
   updateDetailCount();
   updateDurationPreview();
   renderAll();
+  initEmailCodeLogin();
+}
+
+function initEmailCodeLogin() {
+  if (!authRefs.loginPage || !authRefs.mainApp) {
+    return;
+  }
+
+  renderDailyQuote();
+  bindEmailCodeLoginEvents();
+  bindGlobalMenuEvents();
+  closeLoginOverlay();
+  updateMenuAuthButton();
+  updateLoginView();
+  void initializeCloudbaseAuth();
+}
+
+function bindEmailCodeLoginEvents() {
+  if (authRefs.loginLogo && authRefs.loginLogoFallback) {
+    authRefs.loginLogo.addEventListener("error", () => {
+      authRefs.loginLogo.classList.add("is-hidden");
+      authRefs.loginLogoFallback.classList.remove("is-hidden");
+    });
+  }
+
+  if (authRefs.sendBtn) {
+    authRefs.sendBtn.addEventListener("click", () => {
+      void handleSendCode();
+    });
+  }
+
+  if (authRefs.resendBtn) {
+    authRefs.resendBtn.addEventListener("click", () => {
+      if (authState.countdown <= 0) {
+        void handleSendCode();
+      }
+    });
+  }
+
+  if (authRefs.loginForm) {
+    authRefs.loginForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void handleLoginWithCode();
+    });
+  }
+
+  if (authRefs.loginCloseBtn) {
+    authRefs.loginCloseBtn.addEventListener("click", () => {
+      closeLoginOverlay();
+    });
+  }
+
+  if (authRefs.loginPage) {
+    authRefs.loginPage.addEventListener("click", (event) => {
+      if (event.target === authRefs.loginPage) {
+        closeLoginOverlay();
+      }
+    });
+  }
+
+  window.addEventListener("beforeunload", clearCountdownTimer);
+}
+
+function bindGlobalMenuEvents() {
+  if (authRefs.menuToggleBtn) {
+    authRefs.menuToggleBtn.setAttribute("aria-expanded", "false");
+  }
+
+  if (authRefs.menuToggleBtn) {
+    authRefs.menuToggleBtn.addEventListener("click", () => {
+      toggleGlobalMenu();
+    });
+  }
+
+  if (authRefs.menuAuthBtn) {
+    authRefs.menuAuthBtn.addEventListener("click", () => {
+      void handleMenuAuthAction();
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!authRefs.menuWrap) {
+      return;
+    }
+    if (!authRefs.menuWrap.contains(event.target)) {
+      closeGlobalMenu();
+    }
+  });
+}
+
+async function handleMenuAuthAction() {
+  closeGlobalMenu();
+  if (!authState.auth) {
+    setLoginMessage("\u8ba4\u8bc1\u670d\u52a1\u6b63\u5728\u521d\u59cb\u5316\uff0c\u8bf7\u7a0d\u5019\u3002", "error");
+    openLoginOverlay();
+    return;
+  }
+
+  if (authState.user && !authState.user.isAnonymous) {
+    try {
+      await authState.auth.signOut();
+      try {
+        await authState.auth.signInAnonymously();
+      } catch (error) {
+        console.warn("Anonymous sign-in after sign-out failed:", error);
+      }
+      authState.user = null;
+      authState.verificationContext = null;
+      authState.codeSent = false;
+      authState.countdown = 0;
+      clearCountdownTimer();
+      updateLoginView();
+      updateMenuAuthButton();
+      setLoginMessage("\u5df2\u9000\u51fa\u767b\u5f55\u3002", "success");
+      openLoginOverlay();
+    } catch (error) {
+      setLoginMessage(getErrorMessage(error, "\u9000\u51fa\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5\u3002"), "error");
+    }
+    return;
+  }
+
+  openLoginOverlay();
+}
+
+function toggleGlobalMenu(forceOpen) {
+  if (!authRefs.menuDropdown) {
+    return;
+  }
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : authRefs.menuDropdown.classList.contains("is-hidden");
+  authRefs.menuDropdown.classList.toggle("is-hidden", !shouldOpen);
+  if (authRefs.menuToggleBtn) {
+    authRefs.menuToggleBtn.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  }
+}
+
+function closeGlobalMenu() {
+  toggleGlobalMenu(false);
+}
+
+function updateMenuAuthButton() {
+  if (!authRefs.menuAuthBtn || !authRefs.menuAccountValue) {
+    return;
+  }
+  const loggedIn = Boolean(authState.user && !authState.user.isAnonymous);
+  authRefs.menuAccountValue.textContent = loggedIn
+    ? (authState.user.email || "\u5df2\u767b\u5f55")
+    : "\u672a\u767b\u5f55";
+  authRefs.menuAuthBtn.textContent = loggedIn ? "\u9000\u51fa\u767b\u5f55" : "\u767b\u5f55";
+  authRefs.menuAuthBtn.classList.toggle("is-danger", loggedIn);
+}
+
+function renderDailyQuote() {
+  if (!authRefs.quoteText || !authRefs.quoteSource || !DAILY_QUOTES.length) {
+    return;
+  }
+
+  const now = new Date();
+  const daySerial = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000);
+  const quoteIndex = ((daySerial % DAILY_QUOTES.length) + DAILY_QUOTES.length) % DAILY_QUOTES.length;
+  const quote = DAILY_QUOTES[quoteIndex];
+  authRefs.quoteText.textContent = quote.text;
+  authRefs.quoteSource.textContent = "\u2014\u2014 " + quote.source;
+}
+
+async function initializeCloudbaseAuth() {
+  if (!authRefs.message) {
+    return;
+  }
+
+  if (!CLOUDBASE_ENV_ID || CLOUDBASE_ENV_ID === "YOUR_CLOUDBASE_ENV_ID") {
+    setLoginMessage("\u8bf7\u5148\u5728 app.js \u4e2d\u914d\u7f6e CLOUDBASE_ENV_ID\u3002", "error");
+    updateLoginView();
+    return;
+  }
+
+  setAuthLoading(true);
+  setLoginMessage("\u6b63\u5728\u521d\u59cb\u5316\u767b\u5f55\u670d\u52a1\uff0c\u8bf7\u7a0d\u5019...", "success");
+
+  try {
+    const sdkLoaded = await ensureCloudbaseSdkLoaded();
+    if (!sdkLoaded) {
+      setLoginMessage("CloudBase SDK \u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u7f51\u7edc\u6216 CDN \u8bbf\u95ee\u3002", "error");
+      return;
+    }
+
+    const cloudbaseLib = window.cloudbase || window.tcb;
+    if (!cloudbaseLib || typeof cloudbaseLib.init !== "function") {
+      setLoginMessage("CloudBase SDK \u52a0\u8f7d\u5f02\u5e38\uff0c\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u8bd5\u3002", "error");
+      return;
+    }
+
+    authState.app = cloudbaseLib.init({ env: CLOUDBASE_ENV_ID });
+    authState.auth = authState.app.auth({ persistence: "local" });
+
+    authState.auth.onLoginStateChanged((loginState) => {
+      if (loginState && loginState.user && !loginState.user.isAnonymous) {
+        authState.user = {
+          uid: loginState.user.uid,
+          email: loginState.user.email,
+          isAnonymous: Boolean(loginState.user.isAnonymous)
+        };
+        authState.verificationContext = null;
+        authState.codeSent = false;
+        authState.countdown = 0;
+        clearCountdownTimer();
+        updateLoginView();
+        updateMenuAuthButton();
+        closeLoginOverlay();
+      } else {
+        authState.user = null;
+        updateMenuAuthButton();
+      }
+    });
+
+    const loginState = await authState.auth.getLoginState();
+    if (!loginState || !loginState.user || loginState.user.isAnonymous) {
+      try {
+        await authState.auth.signInAnonymously();
+      } catch (error) {
+        console.warn("Anonymous sign-in failed:", error);
+      }
+      updateMenuAuthButton();
+      return;
+    }
+    updateMenuAuthButton();
+  } catch (error) {
+    console.error("CloudBase init failed:", error);
+    setLoginMessage(getErrorMessage(error, "CloudBase \u521d\u59cb\u5316\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u73af\u5883\u914d\u7f6e\u3002"), "error");
+    openLoginOverlay();
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function ensureCloudbaseSdkLoaded() {
+  const existing = window.cloudbase || window.tcb;
+  if (existing && typeof existing.init === "function") {
+    return true;
+  }
+
+  for (const url of CLOUDBASE_SDK_URLS) {
+    const loaded = await loadScriptByUrl(url);
+    if (!loaded) {
+      continue;
+    }
+    const lib = window.cloudbase || window.tcb;
+    if (lib && typeof lib.init === "function") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function loadScriptByUrl(url) {
+  return new Promise((resolve) => {
+    const exists = document.querySelector(`script[src="${url}"]`);
+    if (exists) {
+      const lib = window.cloudbase || window.tcb;
+      resolve(Boolean(lib && typeof lib.init === "function"));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = url;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
+function openLoginOverlay() {
+  if (!authRefs.loginPage) {
+    return;
+  }
+  closeGlobalMenu();
+  authRefs.loginPage.classList.remove("is-hidden");
+  authRefs.loginPage.setAttribute("aria-hidden", "false");
+}
+
+function closeLoginOverlay() {
+  if (!authRefs.loginPage) {
+    return;
+  }
+  authRefs.loginPage.classList.add("is-hidden");
+  authRefs.loginPage.setAttribute("aria-hidden", "true");
+}
+
+function showLoginPage() {
+  openLoginOverlay();
+}
+
+function showMainApp() {
+  closeLoginOverlay();
+}
+
+function updateLoginView() {
+  if (!authRefs.emailInput || !authRefs.codeField || !authRefs.sendBtn || !authRefs.authActions || !authRefs.resendBtn || !authRefs.submitBtn) {
+    return;
+  }
+
+  const authReady = Boolean(authState.auth);
+  const shouldShowCode = authState.codeSent;
+  authRefs.codeField.classList.toggle("is-hidden", !shouldShowCode);
+  authRefs.sendBtn.classList.toggle("is-hidden", shouldShowCode);
+  authRefs.authActions.classList.toggle("is-hidden", !shouldShowCode);
+
+  const lockEmailInput = shouldShowCode && authState.countdown > 0;
+  authRefs.emailInput.disabled = lockEmailInput || authState.isLoading;
+  authRefs.sendBtn.disabled = authState.isLoading || !authReady;
+  authRefs.submitBtn.disabled = authState.isLoading || !authReady;
+  authRefs.resendBtn.disabled = authState.isLoading || authState.countdown > 0 || !authReady;
+
+  if (!shouldShowCode) {
+    authRefs.sendBtn.textContent = authReady ? "\u53d1\u9001\u9a8c\u8bc1\u7801" : "\u521d\u59cb\u5316\u4e2d...";
+  }
+
+  authRefs.resendBtn.textContent = authState.countdown > 0
+    ? `${authState.countdown}\u79d2\u540e\u53ef\u91cd\u65b0\u53d1\u9001`
+    : "\u6ca1\u6709\u6536\u5230\uff1f\u91cd\u65b0\u53d1\u9001";
+}
+
+function setLoginMessage(message, type) {
+  if (!authRefs.message) {
+    return;
+  }
+
+  authRefs.message.classList.remove("is-hidden", "is-error", "is-success");
+  if (!message) {
+    authRefs.message.textContent = "";
+    authRefs.message.classList.add("is-hidden");
+    return;
+  }
+
+  authRefs.message.textContent = message;
+  if (type === "error") {
+    authRefs.message.classList.add("is-error");
+  }
+  if (type === "success") {
+    authRefs.message.classList.add("is-success");
+  }
+}
+
+function setAuthLoading(isLoading) {
+  authState.isLoading = Boolean(isLoading);
+  updateLoginView();
+}
+
+async function handleSendCode() {
+  if (!authState.auth) {
+    setLoginMessage("\u8ba4\u8bc1\u670d\u52a1\u672a\u5c31\u7eea\uff0c\u8bf7\u7a0d\u5019\u518d\u8bd5\u3002", "error");
+    return;
+  }
+
+  if (!authRefs.emailInput) {
+    return;
+  }
+
+  const email = authRefs.emailInput.value.trim();
+  if (!email) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u90ae\u7bb1\u5730\u5740\u3002", "error");
+    return;
+  }
+
+  if (!EMAIL_REGEX.test(email)) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u6709\u6548\u7684\u90ae\u7bb1\u5730\u5740\u3002", "error");
+    return;
+  }
+
+  setAuthLoading(true);
+  setLoginMessage("", "info");
+
+  try {
+    const verificationInfo = await authState.auth.getVerification({ email });
+    if (!verificationInfo) {
+      setLoginMessage("\u9a8c\u8bc1\u7801\u53d1\u9001\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5\u3002", "error");
+      return;
+    }
+
+    authState.verificationContext = verificationInfo;
+    authState.codeSent = true;
+    if (authRefs.codeInput) {
+      authRefs.codeInput.value = "";
+    }
+    startCountdown(CODE_RESEND_SECONDS);
+    setLoginMessage("\u9a8c\u8bc1\u7801\u5df2\u53d1\u9001\uff0c\u8bf7\u67e5\u6536\u90ae\u4ef6\u3002", "success");
+  } catch (error) {
+    setLoginMessage(getErrorMessage(error, "\u9a8c\u8bc1\u7801\u53d1\u9001\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u90ae\u7bb1\u914d\u7f6e\u3002"), "error");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function handleLoginWithCode() {
+  if (!authState.auth) {
+    setLoginMessage("\u8ba4\u8bc1\u670d\u52a1\u672a\u5c31\u7eea\uff0c\u8bf7\u7a0d\u5019\u518d\u8bd5\u3002", "error");
+    return;
+  }
+
+  if (!authRefs.emailInput || !authRefs.codeInput) {
+    return;
+  }
+
+  const email = authRefs.emailInput.value.trim();
+  const code = authRefs.codeInput.value.trim();
+
+  if (!email || !EMAIL_REGEX.test(email)) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u6709\u6548\u7684\u90ae\u7bb1\u5730\u5740\u3002", "error");
+    return;
+  }
+
+  if (!code) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u9a8c\u8bc1\u7801\u3002", "error");
+    return;
+  }
+
+  if (!authState.verificationContext) {
+    setLoginMessage("\u9a8c\u8bc1\u7801\u4e0a\u4e0b\u6587\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u53d1\u9001\u9a8c\u8bc1\u7801\u3002", "error");
+    return;
+  }
+
+  setAuthLoading(true);
+  setLoginMessage("", "info");
+
+  try {
+    await authState.auth.signInWithEmail({
+      email,
+      verificationCode: code,
+      verificationInfo: authState.verificationContext
+    });
+    authState.verificationContext = null;
+    setLoginMessage("\u767b\u5f55\u6210\u529f\uff0c\u6b63\u5728\u8fdb\u5165\u7cfb\u7edf...", "success");
+  } catch (error) {
+    setLoginMessage(getErrorMessage(error, "\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u9a8c\u8bc1\u7801\u662f\u5426\u6b63\u786e\u3002"), "error");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+function startCountdown(seconds) {
+  clearCountdownTimer();
+  authState.countdown = Math.max(0, Math.floor(seconds));
+  updateLoginView();
+
+  if (authState.countdown <= 0) {
+    return;
+  }
+
+  const tick = () => {
+    authState.countdown -= 1;
+    updateLoginView();
+    if (authState.countdown > 0) {
+      authState.countdownTimerId = window.setTimeout(tick, 1000);
+    } else {
+      authState.countdownTimerId = null;
+    }
+  };
+
+  authState.countdownTimerId = window.setTimeout(tick, 1000);
+}
+
+function clearCountdownTimer() {
+  if (authState.countdownTimerId) {
+    window.clearTimeout(authState.countdownTimerId);
+    authState.countdownTimerId = null;
+  }
+}
+
+function getErrorMessage(error, fallbackMessage) {
+  if (!error) {
+    return fallbackMessage;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (typeof error.message === "string" && error.message.trim()) {
+    return error.message;
+  }
+  return fallbackMessage;
 }
 
 function loadTasks() {
