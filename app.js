@@ -1,4 +1,4 @@
-const STORAGE_KEY = "time-efficiency-tasks-v1";
+﻿const STORAGE_KEY = "time-efficiency-tasks-v1";
 
 const PRIORITY_MAP = {
   important_urgent: "\uD83D\uDD25 \u91CD\u8981\u4E14\u7D27\u6025",
@@ -6,7 +6,15 @@ const PRIORITY_MAP = {
   not_important_urgent: "\u26A1 \u4E0D\u91CD\u8981\u4F46\u7D27\u6025",
   not_important_not_urgent: "\uD83E\uDDCA \u4E0D\u91CD\u8981\u4E5F\u4E0D\u7D27\u6025"
 };
+const IMPORTANCE_LEVEL_MAP = {
+  level1: "1\u7EA7",
+  level2: "2\u7EA7",
+  level3: "3\u7EA7",
+  level4: "4\u7EA7"
+};
+const DEFAULT_IMPORTANCE_LEVEL = "level2";
 const CATEGORY_MAP = {
+  work: "\uD83D\uDCBC \u5DE5\u4F5C",
   explore: "\uD83D\uDEA2 \u63A2\u7D22",
   topic: "\uD83D\uDCDA \u8BFE\u9898",
   dev: "\uD83D\uDCBB \u5F00\u53D1",
@@ -24,6 +32,12 @@ const STATUS_COLUMNS = {
   done: "col-done"
 };
 
+const DONE_TIME_GROUPS = [
+  { key: "morning", label: "\u4E0A\u5348" },
+  { key: "afternoon", label: "\u4E0B\u5348" },
+  { key: "evening", label: "\u665A\u4E0A" }
+];
+
 const SLOT_MINUTES = 30;
 
 const PIE_COLORS = ["#d26a2d", "#4f63c6", "#d94f7f", "#2f9a72", "#b57d1d", "#7f5abf", "#3c79c3", "#66758d", "#b2562d", "#2f7f6d"];
@@ -38,7 +52,10 @@ const state = {
   pieUsedMinutes: 0,
   pieDefaultCenterText: "\u6682\u65E0\u8BB0\u5F55",
   pieActiveIndex: -1,
-  collapsedById: {}
+  collapsedById: {},
+  doneGroupCollapsed: Object.fromEntries(
+    DONE_TIME_GROUPS.map((group) => [group.key, true])
+  )
 };
 
 const refs = {
@@ -46,6 +63,8 @@ const refs = {
   taskId: document.getElementById("task-id"),
   taskName: document.getElementById("task-name"),
   taskPriority: document.getElementById("task-priority"),
+  taskImportanceWrapper: document.getElementById("task-importance-wrapper"),
+  taskImportanceLevels: document.querySelectorAll('input[name="task-importance-level"]'),
   taskDetail: document.getElementById("task-detail"),
   detailCount: document.getElementById("detail-count"),
   taskStart: document.getElementById("task-start"),
@@ -86,6 +105,7 @@ function init() {
   refs.form.addEventListener("submit", onSubmitTask);
   refs.resetForm.addEventListener("click", resetForm);
   refs.taskDetail.addEventListener("input", updateDetailCount);
+  refs.taskPriority.addEventListener("change", handlePriorityChange);
 
   if (refs.taskStart && refs.taskEnd) {
     refs.taskStart.addEventListener("input", updateDurationPreview);
@@ -115,7 +135,9 @@ function init() {
   refs.viewPieBtn.addEventListener("click", () => setDailyView("pie"));
 
   bindPieInteractions();
-  setSelectedCategoriesToForm(["explore"]);
+  setSelectedCategoriesToForm([]);
+  setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
+  handlePriorityChange();
   applyDailyViewMode();
   updateDetailCount();
   updateDurationPreview();
@@ -188,11 +210,13 @@ function normalizeTask(input) {
 
   const startAt = normalizeDateTimeInput(input.startAt || input.start || "");
   const endAt = normalizeDateTimeInput(input.endAt || input.end || "");
+  const priority = PRIORITY_MAP[input.priority] ? input.priority : "important_urgent";
 
   return {
     id: String(input.id || createTaskId()),
     name: String(input.name || "").trim(),
-    priority: PRIORITY_MAP[input.priority] ? input.priority : "important_urgent",
+    priority,
+    importanceLevel: priority === "important_not_urgent" ? sanitizeImportanceLevel(input.importanceLevel) : "",
     detail: String(input.detail || "").trim(),
     startAt,
     endAt,
@@ -247,6 +271,50 @@ function renderCategorySummary() {
   refs.taskCategorySummary.textContent = selected.map((key) => CATEGORY_MAP[key] || "-").join(" / ");
   refs.taskCategorySummary.classList.remove("is-empty");
 }
+function sanitizeImportanceLevel(value) {
+  if (Object.prototype.hasOwnProperty.call(IMPORTANCE_LEVEL_MAP, value)) {
+    return value;
+  }
+  return DEFAULT_IMPORTANCE_LEVEL;
+}
+
+function getSelectedImportanceLevelFromForm() {
+  let selected = DEFAULT_IMPORTANCE_LEVEL;
+  refs.taskImportanceLevels.forEach((input) => {
+    if (input.checked) {
+      selected = input.value;
+    }
+  });
+  return sanitizeImportanceLevel(selected);
+}
+
+function setSelectedImportanceLevelToForm(level) {
+  const selected = sanitizeImportanceLevel(level);
+  refs.taskImportanceLevels.forEach((input) => {
+    input.checked = input.value === selected;
+  });
+}
+
+function handlePriorityChange() {
+  if (!refs.taskImportanceWrapper || !refs.taskPriority) {
+    return;
+  }
+  const showImportanceLevel = refs.taskPriority.value === "important_not_urgent";
+  refs.taskImportanceWrapper.classList.toggle("is-hidden", !showImportanceLevel);
+  if (showImportanceLevel) {
+    setSelectedImportanceLevelToForm(getSelectedImportanceLevelFromForm());
+  }
+}
+
+function formatPriorityLabel(task) {
+  const base = PRIORITY_MAP[task.priority] || "-";
+  if (task.priority !== "important_not_urgent") {
+    return base;
+  }
+  const level = sanitizeImportanceLevel(task.importanceLevel);
+  return `${base} (${IMPORTANCE_LEVEL_MAP[level]})`;
+}
+
 function getTaskCategories(task) {
   const categories = sanitizeCategoryKeys(
     Array.isArray(task.categories) ? task.categories : [task.category]
@@ -277,6 +345,7 @@ function onSubmitTask(event) {
     id: refs.taskId.value || createTaskId(),
     name: refs.taskName.value.trim(),
     priority: refs.taskPriority.value,
+    importanceLevel: refs.taskPriority.value === "important_not_urgent" ? getSelectedImportanceLevelFromForm() : "",
     detail: refs.taskDetail.value.trim(),
     startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
     endAt: normalizeDateTimeInput(refs.taskEnd ? refs.taskEnd.value : ""),
@@ -330,7 +399,9 @@ function resetForm() {
   refs.taskId.value = "";
   refs.taskStatus.value = "todo";
   refs.taskPriority.value = "important_urgent";
-  setSelectedCategoriesToForm(["explore"]);
+  setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
+  setSelectedCategoriesToForm([]);
+  handlePriorityChange();
   if (refs.taskCategoryPicker) {
     refs.taskCategoryPicker.open = false;
   }
@@ -383,6 +454,9 @@ function renderBoard() {
   });
 
   const statusCount = { todo: 0, doing: 0, done: 0 };
+  const doneGroups = Object.fromEntries(
+    DONE_TIME_GROUPS.map((group) => [group.key, []])
+  );
   const sortedTasks = [...state.tasks]
     .filter((task) => isTaskInDate(task, state.boardDate))
     .sort((a, b) => {
@@ -397,15 +471,28 @@ function renderBoard() {
     const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, task.status) ? task.status : "todo";
     const columnId = STATUS_COLUMNS[status];
     const column = document.getElementById(columnId);
-    column.appendChild(createTaskCard(task));
+
+    if (status === "done") {
+      const groupKey = getTaskTimeGroup(task, state.boardDate);
+      doneGroups[groupKey].push(task);
+    } else {
+      column.appendChild(createTaskCard(task));
+    }
+
     statusCount[status] += 1;
   });
+
+  renderDoneTimeGroups(document.getElementById(STATUS_COLUMNS.done), doneGroups);
 
   refs.countTodo.textContent = String(statusCount.todo);
   refs.countDoing.textContent = String(statusCount.doing);
   refs.countDone.textContent = String(statusCount.done);
 
-  Object.values(STATUS_COLUMNS).forEach((columnId) => {
+  Object.entries(STATUS_COLUMNS).forEach(([status, columnId]) => {
+    if (status === "done") {
+      return;
+    }
+
     const column = document.getElementById(columnId);
     if (!column.children.length) {
       const empty = document.createElement("div");
@@ -414,6 +501,102 @@ function renderBoard() {
       column.appendChild(empty);
     }
   });
+}
+
+function renderDoneTimeGroups(column, groupedTasks) {
+  DONE_TIME_GROUPS.forEach((group) => {
+    const count = groupedTasks[group.key].length;
+    const isCollapsed = getDoneTimeGroupCollapsed(group.key);
+
+    const section = document.createElement("section");
+    section.className = "done-time-group";
+
+    const list = document.createElement("div");
+    list.className = "done-time-list";
+    list.id = `done-time-list-${group.key}`;
+    list.hidden = isCollapsed;
+    if (!count) {
+      const empty = document.createElement("div");
+      empty.className = "empty-done-time-group";
+      empty.textContent = "\u6682\u65E0\u4EFB\u52A1";
+      list.appendChild(empty);
+    } else {
+      groupedTasks[group.key].forEach((task) => {
+        list.appendChild(createTaskCard(task));
+      });
+    }
+
+    const title = document.createElement("h4");
+    title.className = "done-time-group-title";
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "done-time-group-toggle secondary";
+    toggle.setAttribute("aria-controls", list.id);
+    applyDoneTimeGroupCollapsedState(toggle, isCollapsed, group.label, count);
+    toggle.addEventListener("click", () => {
+      const next = !getDoneTimeGroupCollapsed(group.key);
+      state.doneGroupCollapsed[group.key] = next;
+      applyDoneTimeGroupCollapsedState(toggle, next, group.label, count);
+      list.hidden = next;
+    });
+
+    title.appendChild(toggle);
+    section.appendChild(title);
+
+    section.appendChild(list);
+    column.appendChild(section);
+  });
+}
+
+function getDoneTimeGroupCollapsed(groupKey) {
+  if (!Object.prototype.hasOwnProperty.call(state.doneGroupCollapsed, groupKey)) {
+    state.doneGroupCollapsed[groupKey] = true;
+  }
+  return state.doneGroupCollapsed[groupKey];
+}
+
+function applyDoneTimeGroupCollapsedState(toggleButton, isCollapsed, label, count) {
+  const icon = isCollapsed ? "\u25B6" : "\u25BC";
+  const actionText = isCollapsed ? "\u5C55\u5F00" : "\u6298\u53E0";
+  toggleButton.textContent = `${icon} ${label} (${count})`;
+  toggleButton.setAttribute("aria-expanded", String(!isCollapsed));
+  toggleButton.setAttribute("aria-label", `${actionText}${label}`);
+}
+
+function getTaskTimeGroup(task, dateValue) {
+  const effectiveStart = getTaskEffectiveStartOnDate(task, dateValue);
+  if (!effectiveStart) {
+    return "evening";
+  }
+
+  const hour = effectiveStart.getHours();
+  if (hour < 12) {
+    return "morning";
+  }
+  if (hour < 18) {
+    return "afternoon";
+  }
+  return "evening";
+}
+
+function getTaskEffectiveStartOnDate(task, dateValue) {
+  const range = getTaskRange(task);
+  if (!range) {
+    return parseDateTime(task.startAt);
+  }
+
+  if (!dateValue) {
+    return range.start;
+  }
+
+  const dayStart = new Date(`${dateValue}T00:00`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  if (range.end <= dayStart || range.start >= dayEnd) {
+    return null;
+  }
+
+  return new Date(Math.max(range.start.getTime(), dayStart.getTime()));
 }
 
 function isTaskInDate(task, dateValue) {
@@ -441,10 +624,6 @@ function quickCreateTask(status) {
     refs.taskEnd.value = `${baseDate}T09:30`;
   }
 
-  if (!getSelectedCategoriesFromForm().length) {
-    setSelectedCategoriesToForm(["explore"]);
-  }
-
   updateDurationPreview();
   refs.taskName.scrollIntoView({ behavior: "smooth", block: "center" });
   refs.taskName.focus();
@@ -457,7 +636,7 @@ function createTaskCard(task) {
 
   fragment.querySelector(".card-title").textContent = task.name;
   fragment.querySelector(".card-time-range").textContent = `(${formatCardTimeRange(task.startAt, task.endAt)})`;
-  fragment.querySelector(".priority-pill").textContent = PRIORITY_MAP[task.priority] || "-";
+  fragment.querySelector(".priority-pill").textContent = formatPriorityLabel(task);
   fragment.querySelector(".card-detail").textContent = task.detail || "\u65E0\u8BE6\u60C5";
   fragment.querySelector(".card-start").textContent = formatDateTime(task.startAt);
   fragment.querySelector(".card-end").textContent = formatDateTime(task.endAt);
@@ -504,6 +683,8 @@ function fillForm(task) {
   refs.taskId.value = task.id;
   refs.taskName.value = task.name;
   refs.taskPriority.value = task.priority;
+  setSelectedImportanceLevelToForm(task.importanceLevel);
+  handlePriorityChange();
   refs.taskDetail.value = task.detail;
   if (refs.taskStart && refs.taskEnd) {
     refs.taskStart.value = task.startAt;
@@ -933,6 +1114,8 @@ function toDateInputValue(date) {
 function pad2(num) {
   return String(num).padStart(2, "0");
 }
+
+
 
 
 

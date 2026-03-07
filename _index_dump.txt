@@ -3,65 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>24h任务效率看板</title>
+  <title>24h浠诲姟鏁堢巼鐪嬫澘</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="app">
     <header class="app-header">
-      <h1>24h任务效率看板</h1>
-      <p>按时间记录任务，清晰看到每天每一段时间都在做什么。</p>
+      <h1>24h浠诲姟鏁堢巼鐪嬫澘</h1>
+      <p>鎸夋椂闂磋褰曚换鍔★紝娓呮櫚鐪嬪埌姣忓ぉ姣忎竴娈垫椂闂撮兘鍦ㄥ仛浠€涔堛€?/p>
     </header>
 
     <section class="panel form-panel">
-      <h2>新建 / 编辑任务</h2>
+      <h2>鏂板缓 / 缂栬緫浠诲姟</h2>
       <form id="task-form" novalidate>
         <input type="hidden" id="task-id">
 
         <label>
-          任务名称
-          <input id="task-name" type="text" maxlength="50" placeholder="例如：完成需求评审" required>
+          浠诲姟鍚嶇О
+          <input id="task-name" type="text" maxlength="50" placeholder="渚嬪锛氬畬鎴愰渶姹傝瘎瀹? required>
         </label>
 
         <label>
-          任务标签（四象限）
-          <select id="task-priority" required>
+          浠诲姟鏍囩锛堝洓璞￠檺锛?          <select id="task-priority" required>
             <option value="important_urgent">&#x1F525; &#37325;&#35201;&#19988;&#32039;&#24613;</option>
             <option value="important_not_urgent">&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
             <option value="not_important_urgent">&#x26A1; &#19981;&#37325;&#35201;&#20294;&#32039;&#24613;</option>
             <option value="not_important_not_urgent">&#x1F9CA; &#19981;&#37325;&#35201;&#20063;&#19981;&#32039;&#24613;</option>
           </select>
           <div id="task-importance-wrapper" class="importance-level-group is-hidden">
-            <span class="importance-level-label">重要程度</span>
+            <span class="importance-level-label">&#37325;&#35201;&#31243;&#24230;</span>
             <div class="importance-level-options" role="radiogroup" aria-label="importance-levels">
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level1"><span>1级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level2" checked><span>2级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level3"><span>3级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4级</span></label>
+              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level1"><span>1&#32423;</span></label>
+              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level2" checked><span>2&#32423;</span></label>
+              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level3"><span>3&#32423;</span></label>
+              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4&#32423;</span></label>
             </div>
           </div>
         </label>
 
         <label>
-          任务详情（200字以内）
-          <textarea id="task-detail" maxlength="200" rows="3" placeholder="简要描述目标、输出和限制条件"></textarea>
+          浠诲姟璇︽儏锛?00瀛椾互鍐咃級
+          <textarea id="task-detail" maxlength="200" rows="3" placeholder="绠€瑕佹弿杩扮洰鏍囥€佽緭鍑哄拰闄愬埗鏉′欢"></textarea>
           <small id="detail-count">0/200</small>
         </label>
 
         <div class="two-col">
           <label>
-            开始时间
-            <input id="task-start" type="datetime-local" required>
+            寮€濮嬫椂闂?            <input id="task-start" type="datetime-local" required>
           </label>
           <label>
-            结束时间
+            缁撴潫鏃堕棿
             <input id="task-end" type="datetime-local" required>
           </label>
         </div>
 
         <div class="two-col">
           <div class="category-group">
-            <span class="group-label">任务类别（可多选）</span>
+            <span class="group-label">浠诲姟绫诲埆锛堝彲澶氶€夛級</span>
             <details id="task-category-picker" class="category-picker">
               <summary id="task-category-summary" class="category-summary is-empty">请选择任务类别</summary>
               <div class="category-checklist" id="task-category-group">
@@ -80,34 +78,33 @@
           </div>
 
           <label>
-            状态
-            <select id="task-status" required>
-              <option value="todo">🕓 未开始</option>
-              <option value="doing">⏳ 进行中</option>
-              <option value="done">✅ 已完成</option>
+            鐘舵€?            <select id="task-status" required>
+              <option value="todo">馃晵 鏈紑濮?/option>
+              <option value="doing">馃殌 杩涜涓?/option>
+              <option value="done">鉁?宸插畬鎴?/option>
             </select>
           </label>
         </div>
 
-        <p class="duration-preview">总用时：<strong id="duration-preview">--</strong></p>
+        <p class="duration-preview">鎬荤敤鏃讹細<strong id="duration-preview">--</strong></p>
 
         <div class="actions">
-          <button type="submit">保存任务</button>
-          <button type="button" id="reset-form" class="secondary">重置</button>
+          <button type="submit">淇濆瓨浠诲姟</button>
+          <button type="button" id="reset-form" class="secondary">閲嶇疆</button>
         </div>
       </form>
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h2>每日24h分配</h2>
+        <h2>姣忔棩24h鍒嗛厤</h2>
         <div class="head-tools">
-          <div class="view-switch" role="group" aria-label="分配展示方式">
-            <button type="button" id="view-timeline" class="switch-btn is-active">时间切片图</button>
-            <button type="button" id="view-pie" class="switch-btn">饼图视图</button>
+          <div class="view-switch" role="group" aria-label="鍒嗛厤灞曠ず鏂瑰紡">
+            <button type="button" id="view-timeline" class="switch-btn is-active">鏃堕棿鍒囩墖鍥?/button>
+            <button type="button" id="view-pie" class="switch-btn">楗煎浘瑙嗗浘</button>
           </div>
           <label>
-            查看日期
+            鏌ョ湅鏃ユ湡
             <input id="selected-date" type="date">
           </label>
         </div>
@@ -115,11 +112,11 @@
 
       <div class="summary-row">
         <div class="summary-item">
-          <span>已记录时长</span>
+          <span>宸茶褰曟椂闀?/span>
           <strong id="summary-used">0h 0m</strong>
         </div>
         <div class="summary-item">
-          <span>空余时长</span>
+          <span>绌轰綑鏃堕暱</span>
           <strong id="summary-free">24h 0m</strong>
         </div>
       </div>
@@ -138,9 +135,9 @@
 
     <section class="panel">
       <div class="panel-head">
-        <h2>任务看板</h2>
+        <h2>浠诲姟鐪嬫澘</h2>
         <label>
-          查看日期
+          鏌ョ湅鏃ユ湡
           <input id="board-date" type="date">
         </label>
       </div>
@@ -148,29 +145,29 @@
       <div class="board">
         <div class="column">
           <h3 class="column-head">
-            <span class="column-title">🕓 未开始</span>
+            <span class="column-title">馃晵 鏈紑濮?/span>
             <span id="count-todo" class="column-count">0</span>
           </h3>
           <div id="col-todo" class="card-list"></div>
-          <button type="button" class="column-add secondary" data-quick-status="todo" aria-label="在未开始中新增任务">+</button>
+          <button type="button" class="column-add secondary" data-quick-status="todo" aria-label="鍦ㄦ湭寮€濮嬩腑鏂板浠诲姟">+</button>
         </div>
 
         <div class="column">
           <h3 class="column-head">
-            <span class="column-title">⏳ 进行中</span>
+            <span class="column-title">馃殌 杩涜涓?/span>
             <span id="count-doing" class="column-count">0</span>
           </h3>
           <div id="col-doing" class="card-list"></div>
-          <button type="button" class="column-add secondary" data-quick-status="doing" aria-label="在进行中新增任务">+</button>
+          <button type="button" class="column-add secondary" data-quick-status="doing" aria-label="鍦ㄨ繘琛屼腑涓柊澧炰换鍔?>+</button>
         </div>
 
         <div class="column">
           <h3 class="column-head">
-            <span class="column-title">✅ 已完成</span>
+            <span class="column-title">鉁?宸插畬鎴?/span>
             <span id="count-done" class="column-count">0</span>
           </h3>
           <div id="col-done" class="card-list"></div>
-          <button type="button" class="column-add secondary" data-quick-status="done" aria-label="在已完成中新增任务">+</button>
+          <button type="button" class="column-add secondary" data-quick-status="done" aria-label="鍦ㄥ凡瀹屾垚涓柊澧炰换鍔?>+</button>
         </div>
       </div>
     </section>
@@ -183,26 +180,26 @@
           <h4 class="card-title"></h4>
           <span class="card-time-range"></span>
         </div>
-        <button type="button" class="card-toggle secondary" aria-expanded="false">展开</button>
+        <button type="button" class="card-toggle secondary" aria-expanded="false">灞曞紑</button>
       </div>
       <p class="pill priority-pill"></p>
       <p class="card-detail"></p>
       <div class="card-extra">
-        <p class="card-line"><span>开始：</span><span class="card-start"></span></p>
-        <p class="card-line"><span>结束：</span><span class="card-end"></span></p>
-        <p class="card-line"><span>总用时：</span><span class="card-duration"></span></p>
-        <p class="card-line"><span>类别：</span><span class="card-category"></span></p>
+        <p class="card-line"><span>寮€濮嬶細</span><span class="card-start"></span></p>
+        <p class="card-line"><span>缁撴潫锛?/span><span class="card-end"></span></p>
+        <p class="card-line"><span>鎬荤敤鏃讹細</span><span class="card-duration"></span></p>
+        <p class="card-line"><span>绫诲埆锛?/span><span class="card-category"></span></p>
         <label class="card-line">
-          <span>状态：</span>
+          <span>鐘舵€侊細</span>
           <select class="card-status">
-            <option value="todo">🕓 未开始</option>
-            <option value="doing">⏳ 进行中</option>
-            <option value="done">✅ 已完成</option>
+            <option value="todo">馃晵 鏈紑濮?/option>
+            <option value="doing">馃殌 杩涜涓?/option>
+            <option value="done">鉁?宸插畬鎴?/option>
           </select>
         </label>
         <div class="card-actions">
-          <button class="card-edit secondary">编辑</button>
-          <button class="card-delete danger">删除</button>
+          <button class="card-edit secondary">缂栬緫</button>
+          <button class="card-delete danger">鍒犻櫎</button>
         </div>
       </div>
     </article>

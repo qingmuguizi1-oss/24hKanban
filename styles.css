@@ -18,10 +18,11 @@
   --dev: #d66b16;
   --entertainment: #d94f7f;
   --relax: #2f9a72;
-  --sleep: #4f63c6;
-  --meal: #b57d1d;
+  --sleep: #2f9a72;
+  --meal: #52e145;
   --record: #8b6f47;
-  --other: #66758d;
+  --work: #ffe51f;
+  --other: #8c8c8c;
   --empty: rgba(174, 147, 117, 0.2);
 }
 
@@ -244,7 +245,7 @@ small {
 }
 
 .category-summary::after {
-  content: "?";
+  content: "\2193";
   position: absolute;
   right: 12px;
   top: 50%;
@@ -289,6 +290,60 @@ small {
 
 .category-item input {
   accent-color: #b55e2d;
+}
+
+.importance-level-group {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.importance-level-label {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.importance-level-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.importance-level-item {
+  cursor: pointer;
+}
+
+.importance-level-item input {
+  display: none;
+}
+
+.importance-level-item span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  border-radius: 999px;
+  border: 1px solid rgba(157, 115, 75, 0.34);
+  background: rgba(255, 248, 233, 0.88);
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  color: #6a4b35;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.importance-level-item:hover span {
+  border-color: rgba(152, 81, 34, 0.55);
+}
+
+.importance-level-item input:checked + span {
+  color: #fff8eb;
+  border-color: rgba(152, 81, 34, 0.72);
+  background: linear-gradient(140deg, #c46631, #ab4d29);
+  box-shadow: 0 4px 10px rgba(152, 81, 34, 0.2);
 }
 
 .duration-preview {
@@ -633,6 +688,54 @@ button.danger {
   display: grid;
   gap: 10px;
   flex: 1;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.done-time-group {
+  border: 1px solid rgba(167, 120, 75, 0.32);
+  border-radius: 12px;
+  padding: 8px;
+  background: rgba(255, 248, 234, 0.7);
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.done-time-group-title {
+  margin: 0;
+}
+
+.done-time-group-toggle {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 8px;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: 0.92rem;
+  color: #6f4b31;
+}
+
+.done-time-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.done-time-list[hidden] {
+  display: none;
+}
+
+.empty-done-time-group {
+  border: 1px dashed rgba(161, 119, 76, 0.42);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 10px;
+  background: rgba(255, 247, 231, 0.55);
 }
 
 .column-add {
@@ -652,6 +755,7 @@ button.danger {
   display: grid;
   gap: 8px;
   position: relative;
+  align-self: start;
 }
 
 .task-card::before {
@@ -764,6 +868,7 @@ button.danger {
 .slot-meal { background: var(--meal); }
 .slot-record { background: var(--record); }
 .slot-other { background: var(--other); }
+.slot-work { background: var(--work); }
 
 @keyframes panelRise {
   from {
@@ -847,6 +952,7 @@ button.danger {
     font-size: 0.82rem;
   }
 }
+
 
 
 
