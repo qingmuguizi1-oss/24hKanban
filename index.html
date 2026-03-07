@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>24h任务效率看板</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <h1>24h任务效率看板</h1>
+      <p>按时间记录任务，清晰看到每天每一段时间都在做什么。</p>
+    </header>
+
+    <section class="panel form-panel">
+      <h2>新建 / 编辑任务</h2>
+      <form id="task-form" novalidate>
+        <input type="hidden" id="task-id">
+
+        <label>
+          任务名称
+          <input id="task-name" type="text" maxlength="50" placeholder="例如：完成需求评审" required>
+        </label>
+
+        <label>
+          任务标签（四象限）
+          <select id="task-priority" required>
+            <option value="important_urgent">🔥 重要且紧急</option>
+            <option value="important_not_urgent">🎯 重要不紧急</option>
+            <option value="not_important_urgent">⚡ 不重要但紧急</option>
+            <option value="not_important_not_urgent">🧊 不重要也不紧急</option>
+          </select>
+        </label>
+
+        <label>
+          任务详情（200字以内）
+          <textarea id="task-detail" maxlength="200" rows="3" placeholder="简要描述目标、输出和限制条件"></textarea>
+          <small id="detail-count">0/200</small>
+        </label>
+
+        <div class="two-col">
+          <label>
+            开始时间
+            <input id="task-start" type="datetime-local" required>
+          </label>
+          <label>
+            结束时间
+            <input id="task-end" type="datetime-local" required>
+          </label>
+        </div>
+
+        <div class="two-col">
+          <div class="category-group">
+            <span class="group-label">任务类别（可多选）</span>
+            <details id="task-category-picker" class="category-picker">
+              <summary id="task-category-summary" class="category-summary">🚢 探索</summary>
+              <div class="category-checklist" id="task-category-group">
+                <label class="category-item"><input type="checkbox" name="task-categories" value="explore" checked><span>探索</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="topic"><span>课题</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="dev"><span>开发</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="entertainment"><span>娱乐</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="relax"><span>放松</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="sleep"><span>睡觉</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="meal"><span>用餐</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="record"><span>记录</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="other"><span>其他</span></label>
+              </div>
+            </details>
+          </div>
+
+          <label>
+            状态
+            <select id="task-status" required>
+              <option value="todo">🕒 未开始</option>
+              <option value="doing">🚀 进行中</option>
+              <option value="done">✅ 已完成</option>
+            </select>
+          </label>
+        </div>
+
+        <p class="duration-preview">总用时：<strong id="duration-preview">--</strong></p>
+
+        <div class="actions">
+          <button type="submit">保存任务</button>
+          <button type="button" id="reset-form" class="secondary">重置</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>每日24h分配</h2>
+        <div class="head-tools">
+          <div class="view-switch" role="group" aria-label="分配展示方式">
+            <button type="button" id="view-timeline" class="switch-btn is-active">时间切片图</button>
+            <button type="button" id="view-pie" class="switch-btn">饼图视图</button>
+          </div>
+          <label>
+            查看日期
+            <input id="selected-date" type="date">
+          </label>
+        </div>
+      </div>
+
+      <div class="summary-row">
+        <div class="summary-item">
+          <span>已记录时长</span>
+          <strong id="summary-used">0h 0m</strong>
+        </div>
+        <div class="summary-item">
+          <span>空余时长</span>
+          <strong id="summary-free">24h 0m</strong>
+        </div>
+      </div>
+
+      <div id="timeline" class="timeline"></div>
+      <div id="timeline-legend" class="legend"></div>
+      <div id="pie-wrapper" class="pie-wrapper is-hidden">
+        <div class="pie-chart-wrap">
+          <div id="task-pie" class="task-pie"></div>
+          <div id="task-pie-center" class="task-pie-center">0%</div>
+          <div id="pie-tooltip" class="pie-tooltip is-hidden"></div>
+        </div>
+        <div id="pie-legend" class="pie-legend"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>任务看板</h2>
+        <label>
+          查看日期
+          <input id="board-date" type="date">
+        </label>
+      </div>
+
+      <div class="board">
+        <div class="column">
+          <h3 class="column-head">
+            <span class="column-title">🕒 未开始</span>
+            <span id="count-todo" class="column-count">0</span>
+          </h3>
+          <div id="col-todo" class="card-list"></div>
+          <button type="button" class="column-add secondary" data-quick-status="todo" aria-label="在未开始中新增任务">+</button>
+        </div>
+
+        <div class="column">
+          <h3 class="column-head">
+            <span class="column-title">🚀 进行中</span>
+            <span id="count-doing" class="column-count">0</span>
+          </h3>
+          <div id="col-doing" class="card-list"></div>
+          <button type="button" class="column-add secondary" data-quick-status="doing" aria-label="在进行中中新增任务">+</button>
+        </div>
+
+        <div class="column">
+          <h3 class="column-head">
+            <span class="column-title">✅ 已完成</span>
+            <span id="count-done" class="column-count">0</span>
+          </h3>
+          <div id="col-done" class="card-list"></div>
+          <button type="button" class="column-add secondary" data-quick-status="done" aria-label="在已完成中新增任务">+</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="task-card-template">
+    <article class="task-card is-collapsed">
+      <div class="task-card-head">
+        <div class="card-title-wrap">
+          <h4 class="card-title"></h4>
+          <span class="card-time-range"></span>
+        </div>
+        <button type="button" class="card-toggle secondary" aria-expanded="false">展开</button>
+      </div>
+      <p class="pill priority-pill"></p>
+      <p class="card-detail"></p>
+      <div class="card-extra">
+        <p class="card-line"><span>开始：</span><span class="card-start"></span></p>
+        <p class="card-line"><span>结束：</span><span class="card-end"></span></p>
+        <p class="card-line"><span>总用时：</span><span class="card-duration"></span></p>
+        <p class="card-line"><span>类别：</span><span class="card-category"></span></p>
+        <label class="card-line">
+          <span>状态：</span>
+          <select class="card-status">
+            <option value="todo">🕒 未开始</option>
+            <option value="doing">🚀 进行中</option>
+            <option value="done">✅ 已完成</option>
+          </select>
+        </label>
+        <div class="card-actions">
+          <button class="card-edit secondary">编辑</button>
+          <button class="card-delete danger">删除</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
