@@ -1,6 +1,9 @@
 const STORAGE_KEY = "time-efficiency-tasks-v1";
+const CLOUD_IMPORT_MARKER_PREFIX = "time-efficiency-cloud-imported";
 
 const CLOUDBASE_ENV_ID = "jieyou-3gr01mvob9ad92de";
+const CLOUDBASE_TASKS_COLLECTION = "time_efficiency_user_tasks";
+const CLOUDBASE_SYNC_DEBOUNCE_MS = 800;
 const CODE_RESEND_SECONDS = 60;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CLOUDBASE_SDK_URLS = [
@@ -153,6 +156,12 @@ const authState = {
   countdown: 0,
   countdownTimerId: null
 };
+const cloudSyncState = {
+  db: null,
+  activeUid: "",
+  syncTimerId: null,
+  syncInFlight: false
+};
 
 init();
 
@@ -169,6 +178,7 @@ function init() {
   if (refs.taskStart && refs.taskEnd) {
     refs.taskStart.addEventListener("input", updateDurationPreview);
     refs.taskEnd.addEventListener("input", updateDurationPreview);
+    bindDateTimePickerInteractions([refs.taskStart, refs.taskEnd]);
   } else {
     console.warn("Missing #task-start or #task-end fields in form.");
   }
@@ -312,6 +322,7 @@ async function handleMenuAuthAction() {
       authState.codeSent = false;
       authState.countdown = 0;
       clearCountdownTimer();
+      clearCloudSyncState();
       updateLoginView();
       updateMenuAuthButton();
       setLoginMessage("\u5df2\u9000\u51fa\u767b\u5f55\u3002", "success");
@@ -370,6 +381,12 @@ async function initializeCloudbaseAuth() {
     return;
   }
 
+  if (window.location.protocol === "file:") {
+    setLoginMessage("\u68C0\u6D4B\u5230\u5F53\u524D\u4E3A file:// \u6253\u5F00\u9875\u9762\uff0c\u4F1A\u88AB\u6D4F\u89C8\u5668 CORS \u62E6\u622A\u3002\u8BF7\u6539\u4E3A http://localhost \u6216\u5DF2\u914D\u7F6E\u7684 HTTPS \u57DF\u540D\u8BBF\u95EE\u3002", "error");
+    updateLoginView();
+    return;
+  }
+
   if (!CLOUDBASE_ENV_ID || CLOUDBASE_ENV_ID === "YOUR_CLOUDBASE_ENV_ID") {
     setLoginMessage("\u8bf7\u5148\u5728 app.js \u4e2d\u914d\u7f6e CLOUDBASE_ENV_ID\u3002", "error");
     updateLoginView();
@@ -396,23 +413,7 @@ async function initializeCloudbaseAuth() {
     authState.auth = authState.app.auth({ persistence: "local" });
 
     authState.auth.onLoginStateChanged((loginState) => {
-      if (loginState && loginState.user && !loginState.user.isAnonymous) {
-        authState.user = {
-          uid: loginState.user.uid,
-          email: loginState.user.email,
-          isAnonymous: Boolean(loginState.user.isAnonymous)
-        };
-        authState.verificationContext = null;
-        authState.codeSent = false;
-        authState.countdown = 0;
-        clearCountdownTimer();
-        updateLoginView();
-        updateMenuAuthButton();
-        closeLoginOverlay();
-      } else {
-        authState.user = null;
-        updateMenuAuthButton();
-      }
+      void handleAuthLoginStateChanged(loginState);
     });
 
     const loginState = await authState.auth.getLoginState();
@@ -433,6 +434,256 @@ async function initializeCloudbaseAuth() {
   } finally {
     setAuthLoading(false);
   }
+}
+
+async function handleAuthLoginStateChanged(loginState) {
+  try {
+    if (loginState && loginState.user && !loginState.user.isAnonymous) {
+      authState.user = {
+        uid: loginState.user.uid,
+        email: loginState.user.email,
+        isAnonymous: Boolean(loginState.user.isAnonymous)
+      };
+      authState.verificationContext = null;
+      authState.codeSent = false;
+      authState.countdown = 0;
+      clearCountdownTimer();
+      updateLoginView();
+      updateMenuAuthButton();
+      closeLoginOverlay();
+      await bootstrapCloudTaskSync();
+      return;
+    }
+
+    authState.user = null;
+    clearCloudSyncState();
+    updateMenuAuthButton();
+  } catch (error) {
+    console.error("Handle login state change failed:", error);
+  }
+}
+
+async function bootstrapCloudTaskSync() {
+  if (!authState.app || !authState.user || authState.user.isAnonymous) {
+    return;
+  }
+  if (typeof authState.app.database !== "function") {
+    return;
+  }
+
+  cloudSyncState.db = authState.app.database();
+  const uid = String(authState.user.uid || "");
+  cloudSyncState.activeUid = uid;
+
+  try {
+    const localTasks = getNormalizedTaskList(state.tasks);
+    const cloudTasks = await pullTasksFromCloud();
+    if (Array.isArray(cloudTasks)) {
+      const shouldImportLocal = !hasCloudImportMarker(uid) && localTasks.length > 0;
+      const mergedTasks = shouldImportLocal ? mergeTasksForCloudBootstrap(cloudTasks, localTasks) : cloudTasks;
+
+      state.tasks = mergedTasks;
+      saveTasks({ skipCloudSync: true });
+      renderAll();
+
+      if (shouldImportLocal) {
+        const uploaded = await syncTasksToCloud({ immediate: true });
+        if (uploaded) {
+          setCloudImportMarker(uid);
+        }
+      }
+      return;
+    }
+
+    const uploaded = await syncTasksToCloud({ immediate: true });
+    if (uploaded && localTasks.length > 0) {
+      setCloudImportMarker(uid);
+    }
+  } catch (error) {
+    console.warn("Cloud task bootstrap sync failed:", error);
+  }
+}
+
+function getNormalizedTaskList(tasks) {
+  return (Array.isArray(tasks) ? tasks : [])
+    .map(normalizeTask)
+    .filter(Boolean);
+}
+
+function mergeTasksForCloudBootstrap(cloudTasks, localTasks) {
+  const mergedById = new Map();
+  getNormalizedTaskList(cloudTasks).forEach((task) => {
+    mergedById.set(task.id, task);
+  });
+  getNormalizedTaskList(localTasks).forEach((task) => {
+    if (!mergedById.has(task.id)) {
+      mergedById.set(task.id, task);
+    }
+  });
+  return Array.from(mergedById.values());
+}
+
+function getCloudImportMarkerKey(uid) {
+  return `${CLOUD_IMPORT_MARKER_PREFIX}-${uid}`;
+}
+
+function hasCloudImportMarker(uid) {
+  try {
+    return localStorage.getItem(getCloudImportMarkerKey(uid)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setCloudImportMarker(uid) {
+  try {
+    localStorage.setItem(getCloudImportMarkerKey(uid), "1");
+  } catch {
+    // ignore marker persistence failures
+  }
+}
+
+function clearCloudSyncState() {
+  if (cloudSyncState.syncTimerId) {
+    window.clearTimeout(cloudSyncState.syncTimerId);
+    cloudSyncState.syncTimerId = null;
+  }
+  cloudSyncState.syncInFlight = false;
+  cloudSyncState.db = null;
+  cloudSyncState.activeUid = "";
+}
+
+function isCloudSyncEnabled() {
+  return Boolean(
+    cloudSyncState.db
+    && authState.user
+    && !authState.user.isAnonymous
+    && cloudSyncState.activeUid
+    && cloudSyncState.activeUid === String(authState.user.uid || "")
+  );
+}
+
+function getCloudTasksCollection() {
+  if (!cloudSyncState.db) {
+    return null;
+  }
+  return cloudSyncState.db.collection(CLOUDBASE_TASKS_COLLECTION);
+}
+
+function scheduleCloudTaskSync() {
+  if (!isCloudSyncEnabled()) {
+    return;
+  }
+
+  if (cloudSyncState.syncTimerId) {
+    window.clearTimeout(cloudSyncState.syncTimerId);
+  }
+
+  cloudSyncState.syncTimerId = window.setTimeout(() => {
+    cloudSyncState.syncTimerId = null;
+    void syncTasksToCloud();
+  }, CLOUDBASE_SYNC_DEBOUNCE_MS);
+}
+
+async function pullTasksFromCloud() {
+  if (!isCloudSyncEnabled()) {
+    return null;
+  }
+
+  const collection = getCloudTasksCollection();
+  if (!collection) {
+    return null;
+  }
+
+  const result = await collection
+    .where({ uid: "{uid}" })
+    .limit(1)
+    .get();
+  const docs = extractCloudDocsFromQueryResult(result);
+  if (!docs.length) {
+    return null;
+  }
+
+  const tasks = docs[0] && Array.isArray(docs[0].tasks) ? docs[0].tasks : null;
+  if (!tasks) {
+    return null;
+  }
+
+  return tasks
+    .map(normalizeTask)
+    .filter(Boolean);
+}
+
+function extractCloudDocsFromQueryResult(result) {
+  if (!result || !Array.isArray(result.data)) {
+    return [];
+  }
+  return result.data;
+}
+
+async function syncTasksToCloud(options = {}) {
+  const immediate = Boolean(options.immediate);
+  if (!isCloudSyncEnabled()) {
+    return false;
+  }
+
+  if (cloudSyncState.syncInFlight) {
+    if (!immediate) {
+      scheduleCloudTaskSync();
+    }
+    return false;
+  }
+
+  const collection = getCloudTasksCollection();
+  if (!collection || !authState.user) {
+    return false;
+  }
+
+  cloudSyncState.syncInFlight = true;
+  try {
+    const uid = String(authState.user.uid || "");
+    const tasks = state.tasks
+      .map(normalizeTask)
+      .filter(Boolean);
+    const payload = {
+      uid,
+      email: authState.user.email || "",
+      tasks,
+      updatedAt: Date.now()
+    };
+
+    const updateResult = await collection
+      .where({ uid: "{uid}" })
+      .update(payload);
+    if (getUpdatedCountFromUpdateResult(updateResult) > 0) {
+      return true;
+    }
+
+    await collection.add({
+      _id: uid,
+      ...payload
+    });
+    return true;
+  } catch (error) {
+    console.warn("Cloud task sync failed:", error);
+    return false;
+  } finally {
+    cloudSyncState.syncInFlight = false;
+  }
+}
+
+function getUpdatedCountFromUpdateResult(result) {
+  if (!result || typeof result !== "object") {
+    return 0;
+  }
+
+  if (Number.isFinite(result.updated)) {
+    return Number(result.updated);
+  }
+  if (result.stats && Number.isFinite(result.stats.updated)) {
+    return Number(result.stats.updated);
+  }
+  return 0;
 }
 
 async function ensureCloudbaseSdkLoaded() {
@@ -749,7 +1000,7 @@ function normalizeTask(input) {
 
   const startAt = normalizeDateTimeInput(input.startAt || input.start || "");
   const endAt = normalizeDateTimeInput(input.endAt || input.end || "");
-  const priority = PRIORITY_MAP[input.priority] ? input.priority : "important_urgent";
+  const priority = PRIORITY_MAP[input.priority] ? input.priority : "important_not_urgent";
 
   return {
     id: String(input.id || createTaskId()),
@@ -872,8 +1123,12 @@ function getCategoryLabels(task) {
     .join(" / ");
 }
 
-function saveTasks() {
+function saveTasks(options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+  if (options.skipCloudSync) {
+    return;
+  }
+  scheduleCloudTaskSync();
 }
 
 function onSubmitTask(event) {
@@ -937,7 +1192,7 @@ function resetForm() {
   refs.form.reset();
   refs.taskId.value = "";
   refs.taskStatus.value = "todo";
-  refs.taskPriority.value = "important_urgent";
+  refs.taskPriority.value = "important_not_urgent";
   setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
@@ -1000,7 +1255,7 @@ function renderBoard() {
     ])
   );
   const sortedTasks = [...state.tasks]
-    .filter((task) => isTaskInDate(task, state.boardDate))
+    .filter((task) => shouldShowTaskOnBoard(task, state.boardDate))
     .sort((a, b) => {
       const aStart = parseDateTime(a.startAt);
       const bStart = parseDateTime(b.startAt);
@@ -1011,7 +1266,8 @@ function renderBoard() {
 
   sortedTasks.forEach((task) => {
     const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, task.status) ? task.status : "todo";
-    const groupKey = getTaskTimeGroup(task, state.boardDate);
+    const groupDateValue = shouldIgnoreBoardDateForStatus(status) ? "" : state.boardDate;
+    const groupKey = getTaskTimeGroup(task, groupDateValue);
     groupedTasksByStatus[status][groupKey].push(task);
 
     statusCount[status] += 1;
@@ -1138,6 +1394,18 @@ function isTaskInDate(task, dateValue) {
   return intersects(task, dayStart, dayEnd);
 }
 
+function shouldIgnoreBoardDateForStatus(status) {
+  return status === "todo" || status === "doing";
+}
+
+function shouldShowTaskOnBoard(task, dateValue) {
+  const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, task.status) ? task.status : "todo";
+  if (shouldIgnoreBoardDateForStatus(status)) {
+    return true;
+  }
+  return isTaskInDate(task, dateValue);
+}
+
 function quickCreateTask(status) {
   refs.taskId.value = "";
   refs.taskStatus.value = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, status) ? status : "todo";
@@ -1226,6 +1494,33 @@ function fillForm(task) {
   updateDurationPreview();
   refs.taskName.scrollIntoView({ behavior: "smooth", block: "center" });
   refs.taskName.focus();
+}
+
+function bindDateTimePickerInteractions(inputs) {
+  inputs.forEach((input) => {
+    if (!input || input.dataset.pickerBound === "1") {
+      return;
+    }
+    input.dataset.pickerBound = "1";
+    input.addEventListener("click", () => {
+      openNativeDateTimePicker(input);
+    });
+  });
+}
+
+function openNativeDateTimePicker(input) {
+  if (!input || input.disabled || input.readOnly) {
+    return;
+  }
+  if (typeof input.showPicker === "function") {
+    try {
+      input.showPicker();
+      return;
+    } catch (error) {
+      // Ignore and fall back to focus for browsers that reject showPicker in some cases.
+    }
+  }
+  input.focus();
 }
 
 function deleteTask(taskId) {

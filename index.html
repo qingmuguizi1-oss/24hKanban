@@ -22,7 +22,7 @@
   <section id="login-page" class="login-page is-hidden" aria-hidden="true">
     <div class="login-quote-wrap">
       <div class="login-logo-shell">
-        <img id="login-logo" src="/images/login-logo.png" alt="JIEYOU Logo" class="login-logo">
+        <img id="login-logo" src="images/jieyou-logo.jpg" alt="JIEYOU Logo" class="login-logo">
         <div id="login-logo-fallback" class="login-logo-fallback is-hidden">LOGO</div>
       </div>
       <p id="daily-quote-text" class="daily-quote-text"></p>
@@ -85,7 +85,7 @@
           任务标签（四象限）
           <select id="task-priority" required>
             <option value="important_urgent">&#x1F525; &#37325;&#35201;&#19988;&#32039;&#24613;</option>
-            <option value="important_not_urgent">&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
+            <option value="important_not_urgent" selected>&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
             <option value="not_important_urgent">&#x26A1; &#19981;&#37325;&#35201;&#20294;&#32039;&#24613;</option>
             <option value="not_important_not_urgent">&#x1F9CA; &#19981;&#37325;&#35201;&#20063;&#19981;&#32039;&#24613;</option>
           </select>
@@ -101,7 +101,7 @@
         </label>
 
         <label>
-          任务详情（200字以内）
+          任务详情（选填）
           <textarea id="task-detail" maxlength="200" rows="3" placeholder="简要描述目标、输出和限制条件"></textarea>
           <small id="detail-count">0/200</small>
         </label>
