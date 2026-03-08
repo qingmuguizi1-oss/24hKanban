@@ -160,13 +160,18 @@
       <div class="panel-head">
         <h2>每日24h分配</h2>
         <div class="head-tools">
-          <div class="view-switch" role="group" aria-label="分配展示方式">
+          <div id="allocation-mode-switch" class="view-switch" role="group" aria-label="分配时间范围">
+            <button type="button" id="mode-day" class="switch-btn is-active">天</button>
+            <button type="button" id="mode-week" class="switch-btn">周</button>
+          </div>
+          <div id="allocation-view-switch" class="view-switch" role="group" aria-label="分配展示方式">
             <button type="button" id="view-timeline" class="switch-btn is-active">时间切片图</button>
             <button type="button" id="view-pie" class="switch-btn">饼图视图</button>
           </div>
-          <label>
+          <label id="allocation-date-label">
             查看日期
             <input id="selected-date" type="date">
+            <span id="selected-week" class="selected-week is-hidden">第--周</span>
           </label>
         </div>
       </div>
@@ -182,6 +187,21 @@
         </div>
       </div>
 
+      <div id="week-wrapper" class="week-wrapper is-hidden">
+        <div id="week-bars" class="week-bars"></div>
+        <div id="week-bars-scroll" class="week-bars-scroll is-hidden">
+          <input
+            id="week-bars-scroll-range"
+            class="week-bars-scroll-range"
+            type="range"
+            min="0"
+            max="0"
+            value="0"
+            step="1"
+            aria-label="周模式类别排行横向滑动"
+          >
+        </div>
+      </div>
       <div id="timeline" class="timeline"></div>
       <div id="timeline-legend" class="legend"></div>
       <div id="pie-wrapper" class="pie-wrapper is-hidden">

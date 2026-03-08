@@ -446,6 +446,29 @@ button.danger {
   color: #fff6e8;
 }
 
+#allocation-date-label {
+  min-width: 188px;
+}
+
+#allocation-date-label input,
+.selected-week {
+  min-width: 188px;
+}
+
+.selected-week {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 11px;
+  color: var(--ink);
+  background: rgba(255, 248, 235, 0.9);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 700;
+  text-align: center;
+}
+
 .summary-row {
   margin-top: 8px;
   display: grid;
@@ -466,6 +489,96 @@ button.danger {
 
 .summary-item strong {
   color: #4f2f1a;
+}
+
+.week-wrapper {
+  margin-top: 12px;
+  border: 1px solid rgba(167, 120, 75, 0.3);
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(255, 249, 238, 0.88), rgba(246, 232, 206, 0.75));
+  padding: 12px 10px;
+}
+
+.week-bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(96px, 1fr);
+  gap: 12px;
+  min-height: 240px;
+  align-items: end;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.week-bar-item {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.week-bar-rank {
+  color: #6f4f36;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.week-bar-track {
+  width: min(56px, 100%);
+  height: 160px;
+  border-radius: 10px;
+  border: 1px solid rgba(171, 123, 78, 0.34);
+  background: linear-gradient(180deg, rgba(237, 221, 194, 0.65), rgba(222, 201, 169, 0.5));
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.week-bar-fill {
+  width: 100%;
+  min-height: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #d78544 0%, #be5f2f 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 232, 205, 0.45);
+  transition: height 0.25s ease;
+}
+
+.week-bar-hours {
+  color: #5c3d28;
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.week-bar-project {
+  color: #816451;
+  font-size: 0.76rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  text-align: center;
+  width: 100%;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-bars-empty {
+  margin: 0;
+  color: #735842;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 0.92rem;
+  align-self: center;
+}
+
+.week-bars-scroll {
+  margin-top: 10px;
+  padding: 0 8px 2px;
+}
+
+.week-bars-scroll-range {
+  width: 100%;
+  accent-color: #c46b33;
+  cursor: pointer;
 }
 
 .timeline {
@@ -641,11 +754,12 @@ button.danger {
 }
 
 .global-menu {
-  position: fixed;
-  top: 16px;
-  right: 18px;
-  z-index: 40;
+  position: fixed !important;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 1000;
   width: max-content;
+  transform: translateZ(0);
 }
 
 #menu-toggle-btn {
@@ -1174,10 +1288,6 @@ button.danger {
     padding: 24px 16px;
   }
 
-  .global-menu {
-    top: 12px;
-    right: 14px;
-  }
 }
 
 @media (max-width: 720px) {
@@ -1216,6 +1326,10 @@ button.danger {
 
   .pie-wrapper {
     grid-template-columns: 1fr;
+  }
+
+  .week-bars {
+    grid-auto-columns: minmax(84px, 84px);
   }
 
   .pie-chart-wrap {

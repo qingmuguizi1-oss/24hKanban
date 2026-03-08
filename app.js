@@ -63,7 +63,6 @@ const DONE_TIME_GROUPS = [
 ];
 
 const SLOT_MINUTES = 30;
-
 const PIE_COLORS = ["#d26a2d", "#4f63c6", "#d94f7f", "#2f9a72", "#b57d1d", "#7f5abf", "#3c79c3", "#66758d", "#b2562d", "#2f7f6d"];
 const PIE_INNER_RADIUS_RATIO = 0.48;
 
@@ -71,6 +70,7 @@ const state = {
   tasks: [],
   selectedDate: toDateInputValue(new Date()),
   boardDate: toDateInputValue(new Date()),
+  allocationMode: "day",
   dailyView: "timeline",
   pieSegments: [],
   pieUsedMinutes: 0,
@@ -103,9 +103,17 @@ const refs = {
   durationPreview: document.getElementById("duration-preview"),
   resetForm: document.getElementById("reset-form"),
   selectedDate: document.getElementById("selected-date"),
+  selectedWeek: document.getElementById("selected-week"),
+  modeDayBtn: document.getElementById("mode-day"),
+  modeWeekBtn: document.getElementById("mode-week"),
+  allocationViewSwitch: document.getElementById("allocation-view-switch"),
   boardDate: document.getElementById("board-date"),
   summaryUsed: document.getElementById("summary-used"),
   summaryFree: document.getElementById("summary-free"),
+  weekWrapper: document.getElementById("week-wrapper"),
+  weekBars: document.getElementById("week-bars"),
+  weekBarsScroll: document.getElementById("week-bars-scroll"),
+  weekBarsScrollRange: document.getElementById("week-bars-scroll-range"),
   timeline: document.getElementById("timeline"),
   timelineLegend: document.getElementById("timeline-legend"),
   viewTimelineBtn: document.getElementById("view-timeline"),
@@ -187,7 +195,7 @@ function init() {
   });
   refs.selectedDate.addEventListener("input", () => {
     state.selectedDate = refs.selectedDate.value;
-    renderDailyOverview();
+    renderAllocationOverview();
   });
   refs.boardDate.addEventListener("input", () => {
     state.boardDate = refs.boardDate.value;
@@ -202,12 +210,19 @@ function init() {
 
   refs.viewTimelineBtn.addEventListener("click", () => setDailyView("timeline"));
   refs.viewPieBtn.addEventListener("click", () => setDailyView("pie"));
+  if (refs.modeDayBtn) {
+    refs.modeDayBtn.addEventListener("click", () => setAllocationMode("day"));
+  }
+  if (refs.modeWeekBtn) {
+    refs.modeWeekBtn.addEventListener("click", () => setAllocationMode("week"));
+  }
+  bindWeekBarsScrollEvents();
 
   bindPieInteractions();
   setSelectedCategoriesToForm([]);
   setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
   handlePriorityChange();
-  applyDailyViewMode();
+  applyAllocationMode();
   updateDetailCount();
   updateDurationPreview();
   renderAll();
@@ -500,7 +515,7 @@ async function bootstrapCloudTaskSync() {
       setCloudImportMarker(uid);
     }
   } catch (error) {
-    console.warn("Cloud task bootstrap sync failed:", error);
+    console.warn("Cloud task bootstrap sync failed:", error, buildCloudSyncFailureHint(error));
   }
 }
 
@@ -591,12 +606,13 @@ async function pullTasksFromCloud() {
   }
 
   const collection = getCloudTasksCollection();
-  if (!collection) {
+  const uid = String(authState.user && authState.user.uid ? authState.user.uid : "");
+  if (!collection || !uid) {
     return null;
   }
 
   const result = await collection
-    .where({ uid: "{uid}" })
+    .where({ uid })
     .limit(1)
     .get();
   const docs = extractCloudDocsFromQueryResult(result);
@@ -653,7 +669,7 @@ async function syncTasksToCloud(options = {}) {
     };
 
     const updateResult = await collection
-      .where({ uid: "{uid}" })
+      .where({ uid })
       .update(payload);
     if (getUpdatedCountFromUpdateResult(updateResult) > 0) {
       return true;
@@ -665,11 +681,25 @@ async function syncTasksToCloud(options = {}) {
     });
     return true;
   } catch (error) {
-    console.warn("Cloud task sync failed:", error);
+    console.warn("Cloud task sync failed:", error, buildCloudSyncFailureHint(error));
     return false;
   } finally {
     cloudSyncState.syncInFlight = false;
   }
+}
+
+function buildCloudSyncFailureHint(error) {
+  const message = getErrorMessage(error, "");
+  const lowerMessage = String(message || "").toLowerCase();
+  const maybeCorsError = lowerMessage.includes("network request error")
+    || lowerMessage.includes("cors")
+    || lowerMessage.includes("access-control-allow-origin");
+
+  if (!maybeCorsError) {
+    return "";
+  }
+
+  return `CloudBase 可能发生跨域拦截，请在云开发控制台将当前域名加入 Web 安全域名：${window.location.origin}`;
 }
 
 function getUpdatedCountFromUpdateResult(result) {
@@ -1217,7 +1247,24 @@ function updateDurationPreview() {
 
 function renderAll() {
   renderBoard();
-  renderDailyOverview();
+  renderAllocationOverview();
+}
+
+function setAllocationMode(mode) {
+  if (mode !== "day" && mode !== "week") {
+    return;
+  }
+  state.allocationMode = mode;
+  applyAllocationMode();
+  renderAllocationOverview();
+}
+
+function renderAllocationOverview() {
+  if (state.allocationMode === "week") {
+    renderWeeklyOverview();
+  } else {
+    renderDailyOverview();
+  }
 }
 
 function setDailyView(view) {
@@ -1225,8 +1272,49 @@ function setDailyView(view) {
     return;
   }
   state.dailyView = view;
+  renderAllocationOverview();
+}
+
+function applyAllocationMode() {
+  const isWeekMode = state.allocationMode === "week";
+
+  if (refs.modeDayBtn) {
+    refs.modeDayBtn.classList.toggle("is-active", !isWeekMode);
+  }
+  if (refs.modeWeekBtn) {
+    refs.modeWeekBtn.classList.toggle("is-active", isWeekMode);
+  }
+  if (refs.allocationViewSwitch) {
+    refs.allocationViewSwitch.classList.toggle("is-hidden", isWeekMode);
+  }
+  if (refs.selectedDate) {
+    refs.selectedDate.classList.toggle("is-hidden", isWeekMode);
+  }
+  if (refs.selectedWeek) {
+    refs.selectedWeek.classList.toggle("is-hidden", !isWeekMode);
+  }
+  if (refs.weekWrapper) {
+    refs.weekWrapper.classList.toggle("is-hidden", !isWeekMode);
+  }
+  if (refs.weekBarsScroll) {
+    refs.weekBarsScroll.classList.toggle("is-hidden", !isWeekMode);
+  }
+
+  if (isWeekMode) {
+    refs.timeline.classList.add("is-hidden");
+    refs.pieWrapper.classList.add("is-hidden");
+    refs.timelineLegend.classList.remove("is-hidden");
+    hidePieTooltip();
+    return;
+  }
+
+  if (refs.weekWrapper) {
+    refs.weekWrapper.classList.add("is-hidden");
+  }
+  if (refs.weekBarsScroll) {
+    refs.weekBarsScroll.classList.add("is-hidden");
+  }
   applyDailyViewMode();
-  renderDailyOverview();
 }
 
 function applyDailyViewMode() {
@@ -1535,6 +1623,8 @@ function deleteTask(taskId) {
 
 function renderDailyOverview() {
   const day = refs.selectedDate.value || state.selectedDate;
+  state.selectedDate = day;
+  updateSelectedWeekBadge(day);
   const dayStart = new Date(`${day}T00:00`);
   const totalSlots = (24 * 60) / SLOT_MINUTES;
   const slots = Array.from({ length: totalSlots }, (_, idx) => {
@@ -1581,7 +1671,186 @@ function renderDailyOverview() {
   refs.summaryFree.textContent = formatDuration(stats.freeMinutes);
   renderLegend(stats.categoryTotals, stats.freeMinutes);
   renderTaskPie(stats.taskTotals, stats.usedMinutes);
-  applyDailyViewMode();
+  applyAllocationMode();
+}
+
+function renderWeeklyOverview() {
+  const day = refs.selectedDate.value || state.selectedDate;
+  state.selectedDate = day;
+  updateSelectedWeekBadge(day);
+
+  const weekStats = computeWeeklyStats(day);
+  refs.summaryUsed.textContent = formatDuration(weekStats.usedMinutes);
+  refs.summaryFree.textContent = formatDuration(weekStats.freeMinutes);
+  renderLegend(weekStats.categoryTotals, weekStats.freeMinutes);
+  renderWeekBars(weekStats.categoryRanking);
+  applyAllocationMode();
+}
+
+function computeWeeklyStats(day) {
+  const weekRange = getWeekRangeFromDate(day);
+  const categoryTotals = Object.fromEntries(Object.keys(CATEGORY_MAP).map((key) => [key, 0]));
+  let usedMinutes = 0;
+
+  state.tasks.forEach((task) => {
+    const range = getTaskRange(task);
+    if (!range) {
+      return;
+    }
+
+    const overlap = getOverlapMinutes(range.start, range.end, weekRange.start, weekRange.end);
+    if (overlap <= 0) {
+      return;
+    }
+
+    usedMinutes += overlap;
+
+    const categories = getTaskCategories(task);
+    const share = overlap / categories.length;
+    categories.forEach((category) => {
+      if (Object.prototype.hasOwnProperty.call(categoryTotals, category)) {
+        categoryTotals[category] += share;
+      }
+    });
+  });
+
+  const categoryRanking = Object.entries(categoryTotals)
+    .map(([key, minutes]) => ({ key, minutes, label: CATEGORY_MAP[key] || key }))
+    .sort((a, b) => b.minutes - a.minutes);
+
+  return {
+    categoryRanking,
+    usedMinutes,
+    freeMinutes: Math.max(0, 7 * 24 * 60 - usedMinutes),
+    categoryTotals
+  };
+}
+
+function renderWeekBars(categoryRanking) {
+  if (!refs.weekBars) {
+    return;
+  }
+  refs.weekBars.innerHTML = "";
+
+  if (!categoryRanking.length) {
+    const empty = document.createElement("p");
+    empty.className = "week-bars-empty";
+    empty.textContent = "本周暂无类别用时记录";
+    refs.weekBars.appendChild(empty);
+    updateWeekBarsScrollState();
+    return;
+  }
+
+  const maxMinutes = categoryRanking.reduce((max, category) => Math.max(max, category.minutes), 0);
+  const effectiveMaxMinutes = maxMinutes > 0 ? maxMinutes : 1;
+
+  categoryRanking.forEach((category, index) => {
+    const item = document.createElement("article");
+    item.className = "week-bar-item";
+
+    const rankLabel = document.createElement("span");
+    rankLabel.className = "week-bar-rank";
+    rankLabel.textContent = `#${index + 1}`;
+
+    const categoryLabel = document.createElement("span");
+    categoryLabel.className = "week-bar-project";
+    categoryLabel.textContent = category.label;
+
+    const track = document.createElement("div");
+    track.className = "week-bar-track";
+
+    const fill = document.createElement("div");
+    fill.className = "week-bar-fill";
+    const ratio = category.minutes / effectiveMaxMinutes;
+    fill.style.height = `${Math.max(0, Math.round(ratio * 100))}%`;
+    fill.style.background = `var(--${category.key})`;
+    fill.classList.add(`slot-${category.key}`);
+
+    const hourText = document.createElement("span");
+    hourText.className = "week-bar-hours";
+    hourText.textContent = `${(category.minutes / 60).toFixed(1)}h`;
+
+    track.appendChild(fill);
+    item.appendChild(rankLabel);
+    item.appendChild(track);
+    item.appendChild(hourText);
+    item.appendChild(categoryLabel);
+    item.title = `${category.label} | 本周累计 ${formatDuration(category.minutes)} | 排名 #${index + 1}`;
+
+    refs.weekBars.appendChild(item);
+  });
+
+  updateWeekBarsScrollState();
+}
+
+function getWeekRangeFromDate(dayValue) {
+  const base = parseDateTime(`${dayValue}T00:00`) || new Date();
+  const monday = new Date(base);
+  const dayIndex = (monday.getDay() + 6) % 7;
+  monday.setDate(monday.getDate() - dayIndex);
+  monday.setHours(0, 0, 0, 0);
+  const sundayEnd = new Date(monday.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return { start: monday, end: sundayEnd };
+}
+
+function bindWeekBarsScrollEvents() {
+  if (!refs.weekBars || !refs.weekBarsScrollRange) {
+    return;
+  }
+
+  refs.weekBars.addEventListener("scroll", syncWeekBarsScrollRangeValue);
+  refs.weekBarsScrollRange.addEventListener("input", () => {
+    refs.weekBars.scrollLeft = Number(refs.weekBarsScrollRange.value || 0);
+  });
+  window.addEventListener("resize", updateWeekBarsScrollState);
+}
+
+function syncWeekBarsScrollRangeValue() {
+  if (!refs.weekBars || !refs.weekBarsScrollRange) {
+    return;
+  }
+  refs.weekBarsScrollRange.value = String(Math.round(refs.weekBars.scrollLeft));
+}
+
+function updateWeekBarsScrollState() {
+  if (!refs.weekBars || !refs.weekBarsScroll || !refs.weekBarsScrollRange) {
+    return;
+  }
+
+  const maxScroll = Math.max(0, Math.round(refs.weekBars.scrollWidth - refs.weekBars.clientWidth));
+  if (maxScroll <= 0) {
+    refs.weekBars.scrollLeft = 0;
+    refs.weekBarsScrollRange.min = "0";
+    refs.weekBarsScrollRange.max = "0";
+    refs.weekBarsScrollRange.value = "0";
+    refs.weekBarsScroll.classList.add("is-hidden");
+    return;
+  }
+
+  refs.weekBarsScrollRange.min = "0";
+  refs.weekBarsScrollRange.max = String(maxScroll);
+  refs.weekBarsScrollRange.value = String(Math.min(maxScroll, Math.max(0, Math.round(refs.weekBars.scrollLeft))));
+  refs.weekBarsScroll.classList.remove("is-hidden");
+}
+
+function updateSelectedWeekBadge(dayValue) {
+  if (!refs.selectedWeek) {
+    return;
+  }
+
+  const base = parseDateTime(`${dayValue}T00:00`) || new Date();
+  const weekInfo = getIsoWeekInfo(base);
+  refs.selectedWeek.textContent = `第${weekInfo.week}周`;
+  refs.selectedWeek.title = `${weekInfo.year}年第${weekInfo.week}周`;
+}
+
+function getIsoWeekInfo(date) {
+  const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const weekDay = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - weekDay);
+  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+  return { year: utcDate.getUTCFullYear(), week };
 }
 
 function getSlotSegments(slotStart, slotEnd) {
