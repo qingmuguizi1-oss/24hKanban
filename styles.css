@@ -16,6 +16,7 @@
   --explore: #3c79c3;
   --topic: #7f5abf;
   --dev: #d66b16;
+  --inspiration: #7300ff;
   --entertainment: #d94f7f;
   --relax: #2f9a72;
   --sleep: #2f9a72;
@@ -1256,6 +1257,7 @@ button.danger {
 .slot-explore { background: var(--explore); }
 .slot-topic { background: var(--topic); }
 .slot-dev { background: var(--dev); }
+.slot-inspiration { background: var(--inspiration); }
 .slot-entertainment { background: var(--entertainment); }
 .slot-relax { background: var(--relax); }
 .slot-sleep { background: var(--sleep); }

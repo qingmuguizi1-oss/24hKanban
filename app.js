@@ -36,18 +36,43 @@ const IMPORTANCE_LEVEL_MAP = {
   level3: "3\u7EA7",
   level4: "4\u7EA7"
 };
+const URGENT_LEVEL_MAP = {
+  urgent1: "1\u7EA7",
+  urgent2: "2\u7EA7",
+  urgent3: "3\u7EA7"
+};
 const DEFAULT_IMPORTANCE_LEVEL = "level2";
+const DEFAULT_URGENT_LEVEL = "urgent3";
+const AUTO_URGENT_ESCALATION_DAY_LEVELS = [
+  { minDays: 5, level: "urgent1" },
+  { minDays: 3, level: "urgent2" },
+  { minDays: 1, level: "urgent3" }
+];
 const CATEGORY_MAP = {
   work: "\uD83D\uDCBC \u5DE5\u4F5C",
   explore: "\uD83D\uDEA2 \u63A2\u7D22",
   topic: "\uD83D\uDCDA \u8BFE\u9898",
   dev: "\uD83D\uDCBB \u5F00\u53D1",
-  entertainment: "\uD83C\uDFAE \u5A31\u4E50",
+  inspiration: "\uD83D\uDCA1 \u7075\u611F",
   relax: "\uD83E\uDDD8 \u653E\u677E",
   sleep: "\uD83D\uDE34 \u7761\u89C9",
   meal: "\uD83C\uDF7D \u7528\u9910",
   record: "\uD83D\uDCDD \u8BB0\u5F55",
+  entertainment: "\uD83C\uDFAE \u5A31\u4E50",
   other: "\uD83E\uDDE9 \u5176\u4ED6"
+};
+const CATEGORY_COLOR_MAP = {
+  work: "#ffe51f",
+  explore: "#3c79c3",
+  topic: "#7f5abf",
+  dev: "#d66b16",
+  inspiration: "#9b5de5",
+  relax: "#2f9a72",
+  sleep: "#2f9a72",
+  meal: "#52e145",
+  record: "#8b6f47",
+  entertainment: "#d94f7f",
+  other: "#8c8c8c"
 };
 
 const STATUS_COLUMNS = {
@@ -92,6 +117,8 @@ const refs = {
   taskPriority: document.getElementById("task-priority"),
   taskImportanceWrapper: document.getElementById("task-importance-wrapper"),
   taskImportanceLevels: document.querySelectorAll('input[name="task-importance-level"]'),
+  taskUrgentWrapper: document.getElementById("task-urgent-wrapper"),
+  taskUrgentLevels: document.querySelectorAll('input[name="task-urgent-level"]'),
   taskDetail: document.getElementById("task-detail"),
   detailCount: document.getElementById("detail-count"),
   taskStart: document.getElementById("task-start"),
@@ -1037,6 +1064,8 @@ function normalizeTask(input) {
     name: String(input.name || "").trim(),
     priority,
     importanceLevel: priority === "important_not_urgent" ? sanitizeImportanceLevel(input.importanceLevel) : "",
+    urgentLevel: priority === "important_urgent" ? sanitizeUrgentLevel(input.urgentLevel) : "",
+    autoUrgentEscalation: input.autoUrgentEscalation === true,
     detail: String(input.detail || "").trim(),
     startAt,
     endAt,
@@ -1098,6 +1127,13 @@ function sanitizeImportanceLevel(value) {
   return DEFAULT_IMPORTANCE_LEVEL;
 }
 
+function sanitizeUrgentLevel(value) {
+  if (Object.prototype.hasOwnProperty.call(URGENT_LEVEL_MAP, value)) {
+    return value;
+  }
+  return DEFAULT_URGENT_LEVEL;
+}
+
 function getSelectedImportanceLevelFromForm() {
   let selected = DEFAULT_IMPORTANCE_LEVEL;
   refs.taskImportanceLevels.forEach((input) => {
@@ -1115,24 +1151,50 @@ function setSelectedImportanceLevelToForm(level) {
   });
 }
 
+function getSelectedUrgentLevelFromForm() {
+  let selected = DEFAULT_URGENT_LEVEL;
+  refs.taskUrgentLevels.forEach((input) => {
+    if (input.checked) {
+      selected = input.value;
+    }
+  });
+  return sanitizeUrgentLevel(selected);
+}
+
+function setSelectedUrgentLevelToForm(level) {
+  const selected = sanitizeUrgentLevel(level);
+  refs.taskUrgentLevels.forEach((input) => {
+    input.checked = input.value === selected;
+  });
+}
+
 function handlePriorityChange() {
-  if (!refs.taskImportanceWrapper || !refs.taskPriority) {
+  if (!refs.taskImportanceWrapper || !refs.taskUrgentWrapper || !refs.taskPriority) {
     return;
   }
   const showImportanceLevel = refs.taskPriority.value === "important_not_urgent";
+  const showUrgentLevel = refs.taskPriority.value === "important_urgent";
   refs.taskImportanceWrapper.classList.toggle("is-hidden", !showImportanceLevel);
+  refs.taskUrgentWrapper.classList.toggle("is-hidden", !showUrgentLevel);
   if (showImportanceLevel) {
     setSelectedImportanceLevelToForm(getSelectedImportanceLevelFromForm());
+  }
+  if (showUrgentLevel) {
+    setSelectedUrgentLevelToForm(getSelectedUrgentLevelFromForm());
   }
 }
 
 function formatPriorityLabel(task) {
   const base = PRIORITY_MAP[task.priority] || "-";
-  if (task.priority !== "important_not_urgent") {
-    return base;
+  if (task.priority === "important_not_urgent") {
+    const level = sanitizeImportanceLevel(task.importanceLevel);
+    return `${base} (${IMPORTANCE_LEVEL_MAP[level]})`;
   }
-  const level = sanitizeImportanceLevel(task.importanceLevel);
-  return `${base} (${IMPORTANCE_LEVEL_MAP[level]})`;
+  if (task.priority === "important_urgent") {
+    const level = sanitizeUrgentLevel(task.urgentLevel);
+    return `${base} (${URGENT_LEVEL_MAP[level]})`;
+  }
+  return base;
 }
 
 function getTaskCategories(task) {
@@ -1161,21 +1223,90 @@ function saveTasks(options = {}) {
   scheduleCloudTaskSync();
 }
 
+function getAutoUrgentLevelByTask(task, now = new Date()) {
+  if (!task || task.status !== "doing") {
+    return "";
+  }
+
+  const start = parseDateTime(task.startAt);
+  if (!start) {
+    return "";
+  }
+
+  const elapsedDays = (now.getTime() - start.getTime()) / (24 * 60 * 60 * 1000);
+  if (elapsedDays < 1) {
+    return "";
+  }
+
+  for (const rule of AUTO_URGENT_ESCALATION_DAY_LEVELS) {
+    if (elapsedDays >= rule.minDays) {
+      return rule.level;
+    }
+  }
+
+  return "";
+}
+
+function applyAutoUrgentEscalation(now = new Date()) {
+  let hasChange = false;
+
+  state.tasks.forEach((task) => {
+    const targetLevel = getAutoUrgentLevelByTask(task, now);
+    if (!targetLevel) {
+      return;
+    }
+
+    const canAutoEscalate = task.priority === "important_not_urgent" || task.autoUrgentEscalation === true;
+    if (!canAutoEscalate) {
+      return;
+    }
+
+    const normalizedCurrentLevel = sanitizeUrgentLevel(task.urgentLevel);
+    if (
+      task.priority !== "important_urgent"
+      || normalizedCurrentLevel !== targetLevel
+      || task.autoUrgentEscalation !== true
+      || task.importanceLevel
+    ) {
+      task.priority = "important_urgent";
+      task.urgentLevel = targetLevel;
+      task.importanceLevel = "";
+      task.autoUrgentEscalation = true;
+      hasChange = true;
+    }
+  });
+
+  return hasChange;
+}
+
 function onSubmitTask(event) {
   event.preventDefault();
 
   const categories = getSelectedCategoriesFromForm();
+  const existingTask = state.tasks.find((item) => item.id === refs.taskId.value);
   const task = {
     id: refs.taskId.value || createTaskId(),
     name: refs.taskName.value.trim(),
     priority: refs.taskPriority.value,
     importanceLevel: refs.taskPriority.value === "important_not_urgent" ? getSelectedImportanceLevelFromForm() : "",
+    urgentLevel: refs.taskPriority.value === "important_urgent" ? getSelectedUrgentLevelFromForm() : "",
+    autoUrgentEscalation: false,
     detail: refs.taskDetail.value.trim(),
     startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
     endAt: normalizeDateTimeInput(refs.taskEnd ? refs.taskEnd.value : ""),
     categories,
     status: refs.taskStatus.value
   };
+
+  if (
+    task.priority === "important_urgent"
+    && existingTask
+    && existingTask.autoUrgentEscalation === true
+    && existingTask.priority === "important_urgent"
+    && sanitizeUrgentLevel(existingTask.urgentLevel) === task.urgentLevel
+  ) {
+    task.autoUrgentEscalation = true;
+  }
 
   if (!task.name) {
     alert("\u8BF7\u8F93\u5165\u4EFB\u52A1\u540D\u79F0\u3002");
@@ -1224,6 +1355,7 @@ function resetForm() {
   refs.taskStatus.value = "todo";
   refs.taskPriority.value = "important_not_urgent";
   setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
+  setSelectedUrgentLevelToForm(DEFAULT_URGENT_LEVEL);
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
   if (refs.taskCategoryPicker) {
@@ -1246,6 +1378,10 @@ function updateDurationPreview() {
 }
 
 function renderAll() {
+  const hasEscalationChange = applyAutoUrgentEscalation();
+  if (hasEscalationChange) {
+    saveTasks();
+  }
   renderBoard();
   renderAllocationOverview();
 }
@@ -1543,7 +1679,7 @@ function createTaskCard(task) {
   statusSelect.addEventListener("change", (event) => {
     task.status = event.target.value;
     saveTasks();
-    renderBoard();
+    renderAll();
   });
 
   fragment.querySelector(".card-edit").addEventListener("click", () => fillForm(task));
@@ -1570,6 +1706,7 @@ function fillForm(task) {
   refs.taskName.value = task.name;
   refs.taskPriority.value = task.priority;
   setSelectedImportanceLevelToForm(task.importanceLevel);
+  setSelectedUrgentLevelToForm(task.urgentLevel);
   handlePriorityChange();
   refs.taskDetail.value = task.detail;
   if (refs.taskStart && refs.taskEnd) {
@@ -1945,7 +2082,8 @@ function renderTaskPie(taskTotals, usedMinutes) {
   let cursor = 0;
 
   taskTotals.forEach((item, idx) => {
-    const color = PIE_COLORS[idx % PIE_COLORS.length];
+    const primaryCategory = item.categories[0] || "explore";
+    const color = CATEGORY_COLOR_MAP[primaryCategory] || PIE_COLORS[idx % PIE_COLORS.length];
     const percent = (item.minutes / usedMinutes) * 100;
     const end = cursor + percent;
 

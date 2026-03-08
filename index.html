@@ -1,4 +1,4 @@
-﻿<!doctype html>
+﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -98,6 +98,14 @@
               <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4级</span></label>
             </div>
           </div>
+          <div id="task-urgent-wrapper" class="importance-level-group is-hidden">
+            <span class="importance-level-label">紧急程度</span>
+            <div class="importance-level-options" role="radiogroup" aria-label="urgent-levels">
+              <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent1"><span>1级</span></label>
+              <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent2"><span>2级</span></label>
+              <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent3" checked><span>3级</span></label>
+            </div>
+          </div>
         </label>
 
         <label>
@@ -127,11 +135,12 @@
                 <label class="category-item"><input type="checkbox" name="task-categories" value="explore"><span>&#x1F6A2; &#25506;&#32034;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="topic"><span>&#x1F4DA; &#35838;&#39064;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="dev"><span>&#x1F4BB; &#24320;&#21457;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="entertainment"><span>&#x1F3AE; &#23089;&#20048;</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="inspiration"><span>&#x1F4A1; &#28789;&#24863;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="relax"><span>&#x1F9D8; &#25918;&#26494;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="sleep"><span>&#x1F634; &#30561;&#35273;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="meal"><span>&#x1F37D; &#29992;&#39184;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="record"><span>&#x1F4DD; &#35760;&#24405;</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="entertainment"><span>&#x1F3AE; &#23089;&#20048;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="other"><span>&#x1F9E9; &#20854;&#20182;</span></label>
               </div>
             </details>
@@ -287,6 +296,6 @@
   </template>
 
   <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260309-1"></script>
 </body>
 </html>
