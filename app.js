@@ -50,7 +50,16 @@ const MOOD_MAP = {
   tired: "\uD83D\uDE2B \u75B2\u60EB",
   painful: "\uD83D\uDE16 \u75DB\u82E6"
 };
-const DEFAULT_MOOD = "okay";
+const DEFAULT_MOOD = "";
+const PROCESS_MAP = {
+  very_smooth: "\uD83D\uDE04 \u975E\u5E38\u987A\u5229",
+  fairly_smooth: "\uD83D\uDE42 \u8F83\u4E3A\u987A\u5229",
+  normal: "\uD83D\uDE10 \u4E00\u822C",
+  fairly_unsmooth: "\uD83D\uDE23 \u8F83\u4E3A\u4E0D\u987A",
+  very_unsmooth: "\uD83D\uDE2D \u975E\u5E38\u4E0D\u987A"
+};
+const DEFAULT_PROCESS = "";
+const DEFAULT_OPTIONAL_TAG_MODE = "mood";
 const AUTO_URGENT_ESCALATION_DAY_LEVELS = [
   { minDays: 5, level: "urgent1" },
   { minDays: 3, level: "urgent2" },
@@ -62,6 +71,7 @@ const CATEGORY_MAP = {
   topic: "\uD83D\uDCDA \u8BFE\u9898",
   dev: "\uD83D\uDCBB \u5F00\u53D1",
   inspiration: "\uD83D\uDCA1 \u7075\u611F",
+  study: "\uD83D\uDCD8 \u5B66\u4E60",
   relax: "\uD83E\uDDD8 \u653E\u677E",
   sleep: "\uD83D\uDE34 \u7761\u89C9",
   meal: "\uD83C\uDF7D \u7528\u9910",
@@ -75,6 +85,7 @@ const CATEGORY_COLOR_MAP = {
   topic: "#7f5abf",
   dev: "#d66b16",
   inspiration: "#9b5de5",
+  study: "#d66b16",
   relax: "#2f9a72",
   sleep: "#2f9a72",
   meal: "#52e145",
@@ -103,6 +114,7 @@ const state = {
   tasks: [],
   selectedDate: toDateInputValue(new Date()),
   boardDate: toDateInputValue(new Date()),
+  optionalTagMode: DEFAULT_OPTIONAL_TAG_MODE,
   allocationMode: "day",
   dailyView: "timeline",
   pieSegments: [],
@@ -127,8 +139,14 @@ const refs = {
   taskImportanceLevels: document.querySelectorAll('input[name="task-importance-level"]'),
   taskUrgentWrapper: document.getElementById("task-urgent-wrapper"),
   taskUrgentLevels: document.querySelectorAll('input[name="task-urgent-level"]'),
+  switchMood: document.getElementById("switch-mood"),
+  switchProcess: document.getElementById("switch-process"),
+  panelMood: document.getElementById("panel-mood"),
+  panelProcess: document.getElementById("panel-process"),
   taskMood: document.getElementById("task-mood"),
   taskMoodScore: document.getElementById("task-mood-score"),
+  taskProcess: document.getElementById("task-process"),
+  taskProcessScore: document.getElementById("task-process-score"),
   taskDetail: document.getElementById("task-detail"),
   detailCount: document.getElementById("detail-count"),
   taskStart: document.getElementById("task-start"),
@@ -219,6 +237,7 @@ function init() {
   refs.resetForm.addEventListener("click", resetForm);
   refs.taskDetail.addEventListener("input", updateDetailCount);
   refs.taskPriority.addEventListener("change", handlePriorityChange);
+  bindOptionalTagSwitch();
 
   if (refs.taskStart && refs.taskEnd) {
     refs.taskStart.addEventListener("input", updateDurationPreview);
@@ -1068,6 +1087,19 @@ function normalizeTask(input) {
   const startAt = normalizeDateTimeInput(input.startAt || input.start || "");
   const endAt = normalizeDateTimeInput(input.endAt || input.end || "");
   const priority = PRIORITY_MAP[input.priority] ? input.priority : "important_not_urgent";
+  const optionalTagTouched = input.optionalTagTouched === true;
+
+  let mood = sanitizeMoodKey(input.mood);
+  let moodScore = mood ? normalizeMoodScore(input.moodScore) : "";
+  let process = sanitizeProcessKey(input.process);
+  let processScore = process ? normalizeMoodScore(input.processScore) : "";
+
+  if (!optionalTagTouched) {
+    mood = "";
+    moodScore = "";
+    process = "";
+    processScore = "";
+  }
 
   return {
     id: String(input.id || createTaskId()),
@@ -1075,8 +1107,11 @@ function normalizeTask(input) {
     priority,
     importanceLevel: priority === "important_not_urgent" ? sanitizeImportanceLevel(input.importanceLevel) : "",
     urgentLevel: priority === "important_urgent" ? sanitizeUrgentLevel(input.urgentLevel) : "",
-    mood: sanitizeMoodKey(input.mood),
-    moodScore: normalizeMoodScore(input.moodScore),
+    mood,
+    moodScore,
+    process,
+    processScore,
+    optionalTagTouched,
     autoUrgentEscalation: input.autoUrgentEscalation === true,
     detail: String(input.detail || "").trim(),
     startAt,
@@ -1151,6 +1186,13 @@ function sanitizeMoodKey(value) {
     return value;
   }
   return DEFAULT_MOOD;
+}
+
+function sanitizeProcessKey(value) {
+  if (Object.prototype.hasOwnProperty.call(PROCESS_MAP, value)) {
+    return value;
+  }
+  return DEFAULT_PROCESS;
 }
 
 function normalizeMoodScore(value) {
@@ -1236,6 +1278,67 @@ function setSelectedMoodScoreToForm(score) {
   refs.taskMoodScore.value = normalized === "" ? "" : String(normalized);
 }
 
+function getSelectedProcessFromForm() {
+  if (!refs.taskProcess) {
+    return DEFAULT_PROCESS;
+  }
+  return sanitizeProcessKey(refs.taskProcess.value);
+}
+
+function setSelectedProcessToForm(process) {
+  if (!refs.taskProcess) {
+    return;
+  }
+  refs.taskProcess.value = sanitizeProcessKey(process);
+}
+
+function getSelectedProcessScoreFromForm() {
+  if (!refs.taskProcessScore) {
+    return "";
+  }
+  return normalizeMoodScore(refs.taskProcessScore.value);
+}
+
+function setSelectedProcessScoreToForm(score) {
+  if (!refs.taskProcessScore) {
+    return;
+  }
+  const normalized = normalizeMoodScore(score);
+  refs.taskProcessScore.value = normalized === "" ? "" : String(normalized);
+}
+
+function setOptionalTagMode(mode) {
+  const nextMode = mode === "process" ? "process" : "mood";
+  state.optionalTagMode = nextMode;
+
+  if (refs.switchMood) {
+    refs.switchMood.classList.toggle("is-active", nextMode === "mood");
+  }
+  if (refs.switchProcess) {
+    refs.switchProcess.classList.toggle("is-active", nextMode === "process");
+  }
+  if (refs.panelMood) {
+    refs.panelMood.classList.toggle("is-hidden", nextMode !== "mood");
+  }
+  if (refs.panelProcess) {
+    refs.panelProcess.classList.toggle("is-hidden", nextMode !== "process");
+  }
+}
+
+function bindOptionalTagSwitch() {
+  if (refs.switchMood) {
+    refs.switchMood.addEventListener("click", () => {
+      setOptionalTagMode("mood");
+    });
+  }
+  if (refs.switchProcess) {
+    refs.switchProcess.addEventListener("click", () => {
+      setOptionalTagMode("process");
+    });
+  }
+  setOptionalTagMode(DEFAULT_OPTIONAL_TAG_MODE);
+}
+
 function handlePriorityChange() {
   if (!refs.taskImportanceWrapper || !refs.taskUrgentWrapper || !refs.taskPriority) {
     return;
@@ -1267,12 +1370,28 @@ function formatPriorityLabel(task) {
 
 function formatMoodLabel(task) {
   const moodKey = sanitizeMoodKey(task.mood);
+  if (!moodKey) {
+    return "";
+  }
   const mood = MOOD_MAP[moodKey];
   const score = normalizeMoodScore(task.moodScore);
   if (score === "") {
     return mood;
   }
   return `${mood} ${score}`;
+}
+
+function formatProcessLabel(task) {
+  const processKey = sanitizeProcessKey(task.process);
+  if (!processKey) {
+    return "";
+  }
+  const process = PROCESS_MAP[processKey];
+  const score = normalizeMoodScore(task.processScore);
+  if (score === "") {
+    return process;
+  }
+  return `${process} ${score}`;
 }
 
 function getTaskCategories(task) {
@@ -1361,6 +1480,8 @@ function onSubmitTask(event) {
   event.preventDefault();
 
   const categories = getSelectedCategoriesFromForm();
+  const selectedMood = getSelectedMoodFromForm();
+  const selectedProcess = getSelectedProcessFromForm();
   const existingTask = state.tasks.find((item) => item.id === refs.taskId.value);
   const task = {
     id: refs.taskId.value || createTaskId(),
@@ -1368,8 +1489,11 @@ function onSubmitTask(event) {
     priority: refs.taskPriority.value,
     importanceLevel: refs.taskPriority.value === "important_not_urgent" ? getSelectedImportanceLevelFromForm() : "",
     urgentLevel: refs.taskPriority.value === "important_urgent" ? getSelectedUrgentLevelFromForm() : "",
-    mood: getSelectedMoodFromForm(),
-    moodScore: getSelectedMoodScoreFromForm(),
+    mood: selectedMood,
+    moodScore: selectedMood ? getSelectedMoodScoreFromForm() : "",
+    process: selectedProcess,
+    processScore: selectedProcess ? getSelectedProcessScoreFromForm() : "",
+    optionalTagTouched: Boolean(selectedMood || selectedProcess),
     autoUrgentEscalation: false,
     detail: refs.taskDetail.value.trim(),
     startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
@@ -1438,6 +1562,9 @@ function resetForm() {
   setSelectedUrgentLevelToForm(DEFAULT_URGENT_LEVEL);
   setSelectedMoodToForm(DEFAULT_MOOD);
   setSelectedMoodScoreToForm("");
+  setSelectedProcessToForm(DEFAULT_PROCESS);
+  setSelectedProcessScoreToForm("");
+  setOptionalTagMode(DEFAULT_OPTIONAL_TAG_MODE);
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
   if (refs.taskCategoryPicker) {
@@ -1741,7 +1868,14 @@ function createTaskCard(task) {
   fragment.querySelector(".card-title").textContent = task.name;
   fragment.querySelector(".card-time-range").textContent = `(${formatCardTimeRange(task.startAt, task.endAt)})`;
   fragment.querySelector(".priority-pill").textContent = formatPriorityLabel(task);
-  fragment.querySelector(".mood-pill").textContent = formatMoodLabel(task);
+  const moodPill = fragment.querySelector(".mood-pill");
+  const moodLabel = formatMoodLabel(task);
+  moodPill.textContent = moodLabel;
+  moodPill.classList.toggle("is-hidden", !moodLabel);
+  const processPill = fragment.querySelector(".process-pill");
+  const processLabel = formatProcessLabel(task);
+  processPill.textContent = processLabel;
+  processPill.classList.toggle("is-hidden", !processLabel);
   fragment.querySelector(".card-detail").textContent = task.detail || "\u65E0\u8BE6\u60C5";
   fragment.querySelector(".card-start").textContent = formatDateTime(task.startAt);
   fragment.querySelector(".card-end").textContent = formatDateTime(task.endAt);
@@ -1792,6 +1926,9 @@ function fillForm(task) {
   setSelectedUrgentLevelToForm(task.urgentLevel);
   setSelectedMoodToForm(task.mood);
   setSelectedMoodScoreToForm(task.moodScore);
+  setSelectedProcessToForm(task.process);
+  setSelectedProcessScoreToForm(task.processScore);
+  setOptionalTagMode(task.process ? "process" : "mood");
   handlePriorityChange();
   refs.taskDetail.value = task.detail;
   if (refs.taskStart && refs.taskEnd) {
@@ -1953,6 +2090,7 @@ function renderWeekBars(categoryRanking) {
     return;
   }
   refs.weekBars.innerHTML = "";
+  refs.weekBars.scrollLeft = 0;
 
   if (!categoryRanking.length) {
     const empty = document.createElement("p");

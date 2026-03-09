@@ -17,6 +17,7 @@
   --topic: #7f5abf;
   --dev: #d66b16;
   --inspiration: #7300ff;
+  --study: #d66b16;
   --entertainment: #d94f7f;
   --relax: #2f9a72;
   --sleep: #2f9a72;
@@ -231,18 +232,63 @@ small {
   align-items: start;
 }
 
+.task-tag-row > label:last-child {
+  gap: 0;
+}
+
+.optional-tag-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0;
+  margin-bottom: 4px;
+  padding: 1px;
+  border: 1px solid rgba(157, 115, 75, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 248, 233, 0.82);
+}
+
+.optional-tag-switch-btn {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #6a4b35;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.93rem;
+  line-height: 1.2;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.optional-tag-switch-btn:hover {
+  filter: none;
+  background: rgba(214, 171, 126, 0.22);
+}
+
+.optional-tag-switch-btn:active {
+  transform: none;
+}
+
+.optional-tag-switch-btn.is-active {
+  color: #fff8eb;
+  background: linear-gradient(140deg, #c46631, #ab4d29);
+  box-shadow: 0 4px 10px rgba(152, 81, 34, 0.2);
+}
+
 .mood-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 92px;
   gap: 8px;
 }
 
-#task-mood-score {
+#task-mood-score,
+#task-process-score {
   text-align: center;
   font-weight: 600;
 }
 
-#task-mood-score::placeholder {
+#task-mood-score::placeholder,
+#task-process-score::placeholder {
   letter-spacing: 0.08em;
 }
 .category-group {
@@ -517,17 +563,24 @@ button.danger {
   border-radius: 14px;
   background: linear-gradient(170deg, rgba(255, 249, 238, 0.88), rgba(246, 232, 206, 0.75));
   padding: 12px 10px;
+  --week-bar-column-width: 96px;
+  --week-bar-gap: 12px;
+  --week-visible-count: 10;
+  display: grid;
+  justify-items: center;
 }
 
 .week-bars {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(96px, 1fr);
-  gap: 12px;
+  grid-auto-columns: var(--week-bar-column-width);
+  gap: var(--week-bar-gap);
   min-height: 240px;
   align-items: end;
   overflow-x: auto;
   padding-bottom: 4px;
+  width: min(100%, calc(var(--week-visible-count) * var(--week-bar-column-width) + (var(--week-visible-count) - 1) * var(--week-bar-gap)));
+  max-width: 100%;
 }
 
 .week-bar-item {
@@ -593,6 +646,8 @@ button.danger {
 .week-bars-scroll {
   margin-top: 10px;
   padding: 0 8px 2px;
+  width: min(100%, calc(var(--week-visible-count) * var(--week-bar-column-width) + (var(--week-visible-count) - 1) * var(--week-bar-gap)));
+  max-width: 100%;
 }
 
 .week-bars-scroll-range {
@@ -1251,6 +1306,12 @@ button.danger {
   color: #2f5376;
 }
 
+.process-pill {
+  background: rgba(120, 111, 172, 0.14);
+  border-color: rgba(93, 86, 145, 0.32);
+  color: #463f79;
+}
+
 .card-detail {
   margin: 0;
   color: #735741;
@@ -1290,6 +1351,7 @@ button.danger {
 .slot-topic { background: var(--topic); }
 .slot-dev { background: var(--dev); }
 .slot-inspiration { background: var(--inspiration); }
+.slot-study { background: var(--study); }
 .slot-entertainment { background: var(--entertainment); }
 .slot-relax { background: var(--relax); }
 .slot-sleep { background: var(--sleep); }
@@ -1362,8 +1424,9 @@ button.danger {
     grid-template-columns: 1fr;
   }
 
-  .week-bars {
-    grid-auto-columns: minmax(84px, 84px);
+  .week-wrapper {
+    --week-bar-column-width: 84px;
+    --week-bar-gap: 10px;
   }
 
   .pie-chart-wrap {
