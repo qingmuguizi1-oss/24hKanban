@@ -226,6 +226,25 @@ small {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+
+.task-tag-row {
+  align-items: start;
+}
+
+.mood-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+}
+
+#task-mood-score {
+  text-align: center;
+  font-weight: 600;
+}
+
+#task-mood-score::placeholder {
+  letter-spacing: 0.08em;
+}
 .category-group {
   display: flex;
   flex-direction: column;
@@ -1217,6 +1236,19 @@ button.danger {
   padding: 4px 10px;
   font-size: 0.82rem;
   font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.pill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mood-pill {
+  background: rgba(92, 139, 182, 0.14);
+  border-color: rgba(74, 118, 160, 0.32);
+  color: #2f5376;
 }
 
 .card-detail {

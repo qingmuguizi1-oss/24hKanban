@@ -43,6 +43,14 @@ const URGENT_LEVEL_MAP = {
 };
 const DEFAULT_IMPORTANCE_LEVEL = "level2";
 const DEFAULT_URGENT_LEVEL = "urgent3";
+const MOOD_MAP = {
+  excited: "\uD83E\uDD29 \u5174\u594B",
+  relaxed: "\uD83D\uDE0C \u8F7B\u677E",
+  okay: "\uD83D\uDE42 \u5C1A\u53EF",
+  tired: "\uD83D\uDE2B \u75B2\u60EB",
+  painful: "\uD83D\uDE16 \u75DB\u82E6"
+};
+const DEFAULT_MOOD = "okay";
 const AUTO_URGENT_ESCALATION_DAY_LEVELS = [
   { minDays: 5, level: "urgent1" },
   { minDays: 3, level: "urgent2" },
@@ -119,6 +127,8 @@ const refs = {
   taskImportanceLevels: document.querySelectorAll('input[name="task-importance-level"]'),
   taskUrgentWrapper: document.getElementById("task-urgent-wrapper"),
   taskUrgentLevels: document.querySelectorAll('input[name="task-urgent-level"]'),
+  taskMood: document.getElementById("task-mood"),
+  taskMoodScore: document.getElementById("task-mood-score"),
   taskDetail: document.getElementById("task-detail"),
   detailCount: document.getElementById("detail-count"),
   taskStart: document.getElementById("task-start"),
@@ -1065,6 +1075,8 @@ function normalizeTask(input) {
     priority,
     importanceLevel: priority === "important_not_urgent" ? sanitizeImportanceLevel(input.importanceLevel) : "",
     urgentLevel: priority === "important_urgent" ? sanitizeUrgentLevel(input.urgentLevel) : "",
+    mood: sanitizeMoodKey(input.mood),
+    moodScore: normalizeMoodScore(input.moodScore),
     autoUrgentEscalation: input.autoUrgentEscalation === true,
     detail: String(input.detail || "").trim(),
     startAt,
@@ -1134,6 +1146,33 @@ function sanitizeUrgentLevel(value) {
   return DEFAULT_URGENT_LEVEL;
 }
 
+function sanitizeMoodKey(value) {
+  if (Object.prototype.hasOwnProperty.call(MOOD_MAP, value)) {
+    return value;
+  }
+  return DEFAULT_MOOD;
+}
+
+function normalizeMoodScore(value) {
+  if (value === "" || value === null || typeof value === "undefined") {
+    return "";
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "";
+  }
+
+  const rounded = Math.round(numeric);
+  if (rounded < 0) {
+    return 0;
+  }
+  if (rounded > 100) {
+    return 100;
+  }
+  return rounded;
+}
+
 function getSelectedImportanceLevelFromForm() {
   let selected = DEFAULT_IMPORTANCE_LEVEL;
   refs.taskImportanceLevels.forEach((input) => {
@@ -1168,6 +1207,35 @@ function setSelectedUrgentLevelToForm(level) {
   });
 }
 
+function getSelectedMoodFromForm() {
+  if (!refs.taskMood) {
+    return DEFAULT_MOOD;
+  }
+  return sanitizeMoodKey(refs.taskMood.value);
+}
+
+function setSelectedMoodToForm(mood) {
+  if (!refs.taskMood) {
+    return;
+  }
+  refs.taskMood.value = sanitizeMoodKey(mood);
+}
+
+function getSelectedMoodScoreFromForm() {
+  if (!refs.taskMoodScore) {
+    return "";
+  }
+  return normalizeMoodScore(refs.taskMoodScore.value);
+}
+
+function setSelectedMoodScoreToForm(score) {
+  if (!refs.taskMoodScore) {
+    return;
+  }
+  const normalized = normalizeMoodScore(score);
+  refs.taskMoodScore.value = normalized === "" ? "" : String(normalized);
+}
+
 function handlePriorityChange() {
   if (!refs.taskImportanceWrapper || !refs.taskUrgentWrapper || !refs.taskPriority) {
     return;
@@ -1195,6 +1263,16 @@ function formatPriorityLabel(task) {
     return `${base} (${URGENT_LEVEL_MAP[level]})`;
   }
   return base;
+}
+
+function formatMoodLabel(task) {
+  const moodKey = sanitizeMoodKey(task.mood);
+  const mood = MOOD_MAP[moodKey];
+  const score = normalizeMoodScore(task.moodScore);
+  if (score === "") {
+    return mood;
+  }
+  return `${mood} ${score}`;
 }
 
 function getTaskCategories(task) {
@@ -1290,6 +1368,8 @@ function onSubmitTask(event) {
     priority: refs.taskPriority.value,
     importanceLevel: refs.taskPriority.value === "important_not_urgent" ? getSelectedImportanceLevelFromForm() : "",
     urgentLevel: refs.taskPriority.value === "important_urgent" ? getSelectedUrgentLevelFromForm() : "",
+    mood: getSelectedMoodFromForm(),
+    moodScore: getSelectedMoodScoreFromForm(),
     autoUrgentEscalation: false,
     detail: refs.taskDetail.value.trim(),
     startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
@@ -1356,6 +1436,8 @@ function resetForm() {
   refs.taskPriority.value = "important_not_urgent";
   setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
   setSelectedUrgentLevelToForm(DEFAULT_URGENT_LEVEL);
+  setSelectedMoodToForm(DEFAULT_MOOD);
+  setSelectedMoodScoreToForm("");
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
   if (refs.taskCategoryPicker) {
@@ -1659,6 +1741,7 @@ function createTaskCard(task) {
   fragment.querySelector(".card-title").textContent = task.name;
   fragment.querySelector(".card-time-range").textContent = `(${formatCardTimeRange(task.startAt, task.endAt)})`;
   fragment.querySelector(".priority-pill").textContent = formatPriorityLabel(task);
+  fragment.querySelector(".mood-pill").textContent = formatMoodLabel(task);
   fragment.querySelector(".card-detail").textContent = task.detail || "\u65E0\u8BE6\u60C5";
   fragment.querySelector(".card-start").textContent = formatDateTime(task.startAt);
   fragment.querySelector(".card-end").textContent = formatDateTime(task.endAt);
@@ -1707,6 +1790,8 @@ function fillForm(task) {
   refs.taskPriority.value = task.priority;
   setSelectedImportanceLevelToForm(task.importanceLevel);
   setSelectedUrgentLevelToForm(task.urgentLevel);
+  setSelectedMoodToForm(task.mood);
+  setSelectedMoodScoreToForm(task.moodScore);
   handlePriorityChange();
   refs.taskDetail.value = task.detail;
   if (refs.taskStart && refs.taskEnd) {

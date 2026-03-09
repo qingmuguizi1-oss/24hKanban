@@ -81,32 +81,48 @@
           <input id="task-name" type="text" maxlength="50" placeholder="例如：完成需求评审" required>
         </label>
 
-        <label>
-          任务标签（四象限）
-          <select id="task-priority" required>
-            <option value="important_urgent">&#x1F525; &#37325;&#35201;&#19988;&#32039;&#24613;</option>
-            <option value="important_not_urgent" selected>&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
-            <option value="not_important_urgent">&#x26A1; &#19981;&#37325;&#35201;&#20294;&#32039;&#24613;</option>
-            <option value="not_important_not_urgent">&#x1F9CA; &#19981;&#37325;&#35201;&#20063;&#19981;&#32039;&#24613;</option>
-          </select>
-          <div id="task-importance-wrapper" class="importance-level-group is-hidden">
-            <span class="importance-level-label">重要程度</span>
-            <div class="importance-level-options" role="radiogroup" aria-label="importance-levels">
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level1"><span>1级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level2" checked><span>2级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level3"><span>3级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4级</span></label>
+        <div class="two-col task-tag-row">
+          <label>
+            任务标签（四象限）
+            <select id="task-priority" required>
+              <option value="important_urgent">&#x1F525; &#37325;&#35201;&#19988;&#32039;&#24613;</option>
+              <option value="important_not_urgent" selected>&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
+              <option value="not_important_urgent">&#x26A1; &#19981;&#37325;&#35201;&#20294;&#32039;&#24613;</option>
+              <option value="not_important_not_urgent">&#x1F9CA; &#19981;&#37325;&#35201;&#20063;&#19981;&#32039;&#24613;</option>
+            </select>
+            <div id="task-importance-wrapper" class="importance-level-group is-hidden">
+              <span class="importance-level-label">重要程度</span>
+              <div class="importance-level-options" role="radiogroup" aria-label="importance-levels">
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level1"><span>1级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level2" checked><span>2级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level3"><span>3级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4级</span></label>
+              </div>
             </div>
-          </div>
-          <div id="task-urgent-wrapper" class="importance-level-group is-hidden">
-            <span class="importance-level-label">紧急程度</span>
-            <div class="importance-level-options" role="radiogroup" aria-label="urgent-levels">
-              <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent1"><span>1级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent2"><span>2级</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent3" checked><span>3级</span></label>
+            <div id="task-urgent-wrapper" class="importance-level-group is-hidden">
+              <span class="importance-level-label">紧急程度</span>
+              <div class="importance-level-options" role="radiogroup" aria-label="urgent-levels">
+                <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent1"><span>1级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent2"><span>2级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent3" checked><span>3级</span></label>
+              </div>
             </div>
-          </div>
-        </label>
+          </label>
+
+          <label>
+            状态/心情
+            <div class="mood-input-row">
+              <select id="task-mood">
+                <option value="excited">🤩 兴奋</option>
+                <option value="relaxed">😌 轻松</option>
+                <option value="okay" selected>🙂 尚可</option>
+                <option value="tired">😫 疲惫</option>
+                <option value="painful">😖 痛苦</option>
+              </select>
+              <input id="task-mood-score" type="number" min="0" max="100" step="1" placeholder="____" aria-label="状态/心情分数">
+            </div>
+          </label>
+        </div>
 
         <label>
           任务详情（选填）
@@ -272,7 +288,10 @@
         </div>
         <button type="button" class="card-toggle secondary" aria-expanded="false">展开</button>
       </div>
-      <p class="pill priority-pill"></p>
+      <div class="pill-row">
+        <p class="pill priority-pill"></p>
+        <p class="pill mood-pill"></p>
+      </div>
       <p class="card-detail"></p>
       <div class="card-extra">
         <p class="card-line"><span>开始：</span><span class="card-start"></span></p>
@@ -296,6 +315,6 @@
   </template>
 
   <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
-  <script src="app.js?v=20260309-1"></script>
+  <script src="app.js?v=20260309-2"></script>
 </body>
 </html>
