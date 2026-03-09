@@ -168,6 +168,7 @@
                 <label class="category-item"><input type="checkbox" name="task-categories" value="dev"><span>&#x1F4BB; &#24320;&#21457;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="inspiration"><span>&#x1F4A1; &#28789;&#24863;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="study"><span>&#x1F4D8; &#23398;&#20064;</span></label>
+                <label class="category-item"><input type="checkbox" name="task-categories" value="sport"><span>&#x1F3C3; &#36816;&#21160;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="relax"><span>&#x1F9D8; &#25918;&#26494;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="sleep"><span>&#x1F634; &#30561;&#35273;</span></label>
                 <label class="category-item"><input type="checkbox" name="task-categories" value="meal"><span>&#x1F37D; &#29992;&#39184;</span></label>
@@ -205,10 +206,6 @@
             <button type="button" id="mode-day" class="switch-btn is-active">天</button>
             <button type="button" id="mode-week" class="switch-btn">周</button>
           </div>
-          <div id="allocation-view-switch" class="view-switch" role="group" aria-label="分配展示方式">
-            <button type="button" id="view-timeline" class="switch-btn is-active">时间切片图</button>
-            <button type="button" id="view-pie" class="switch-btn">饼图视图</button>
-          </div>
           <label id="allocation-date-label">
             查看日期
             <input id="selected-date" type="date">
@@ -230,29 +227,9 @@
 
       <div id="week-wrapper" class="week-wrapper is-hidden">
         <div id="week-bars" class="week-bars"></div>
-        <div id="week-bars-scroll" class="week-bars-scroll is-hidden">
-          <input
-            id="week-bars-scroll-range"
-            class="week-bars-scroll-range"
-            type="range"
-            min="0"
-            max="0"
-            value="0"
-            step="1"
-            aria-label="周模式类别排行横向滑动"
-          >
-        </div>
       </div>
       <div id="timeline" class="timeline"></div>
       <div id="timeline-legend" class="legend"></div>
-      <div id="pie-wrapper" class="pie-wrapper is-hidden">
-        <div class="pie-chart-wrap">
-          <div id="task-pie" class="task-pie"></div>
-          <div id="task-pie-center" class="task-pie-center">0%</div>
-          <div id="pie-tooltip" class="pie-tooltip is-hidden"></div>
-        </div>
-        <div id="pie-legend" class="pie-legend"></div>
-      </div>
     </section>
 
     <section class="panel">

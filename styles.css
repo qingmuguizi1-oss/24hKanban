@@ -18,6 +18,7 @@
   --dev: #d66b16;
   --inspiration: #7300ff;
   --study: #d66b16;
+  --sport: #2f9a72;
   --entertainment: #d94f7f;
   --relax: #2f9a72;
   --sleep: #2f9a72;
@@ -350,7 +351,7 @@ small {
 
 .category-checklist {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1352,6 +1353,7 @@ button.danger {
 .slot-dev { background: var(--dev); }
 .slot-inspiration { background: var(--inspiration); }
 .slot-study { background: var(--study); }
+.slot-sport { background: var(--sport); }
 .slot-entertainment { background: var(--entertainment); }
 .slot-relax { background: var(--relax); }
 .slot-sleep { background: var(--sleep); }

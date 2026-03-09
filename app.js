@@ -72,6 +72,7 @@ const CATEGORY_MAP = {
   dev: "\uD83D\uDCBB \u5F00\u53D1",
   inspiration: "\uD83D\uDCA1 \u7075\u611F",
   study: "\uD83D\uDCD8 \u5B66\u4E60",
+  sport: "\uD83C\uDFC3 \u8FD0\u52A8",
   relax: "\uD83E\uDDD8 \u653E\u677E",
   sleep: "\uD83D\uDE34 \u7761\u89C9",
   meal: "\uD83C\uDF7D \u7528\u9910",
@@ -86,6 +87,7 @@ const CATEGORY_COLOR_MAP = {
   dev: "#d66b16",
   inspiration: "#9b5de5",
   study: "#d66b16",
+  sport: "#2f9a72",
   relax: "#2f9a72",
   sleep: "#2f9a72",
   meal: "#52e145",
@@ -161,7 +163,6 @@ const refs = {
   selectedWeek: document.getElementById("selected-week"),
   modeDayBtn: document.getElementById("mode-day"),
   modeWeekBtn: document.getElementById("mode-week"),
-  allocationViewSwitch: document.getElementById("allocation-view-switch"),
   boardDate: document.getElementById("board-date"),
   summaryUsed: document.getElementById("summary-used"),
   summaryFree: document.getElementById("summary-free"),
@@ -171,8 +172,6 @@ const refs = {
   weekBarsScrollRange: document.getElementById("week-bars-scroll-range"),
   timeline: document.getElementById("timeline"),
   timelineLegend: document.getElementById("timeline-legend"),
-  viewTimelineBtn: document.getElementById("view-timeline"),
-  viewPieBtn: document.getElementById("view-pie"),
   pieWrapper: document.getElementById("pie-wrapper"),
   taskPie: document.getElementById("task-pie"),
   taskPieCenter: document.getElementById("task-pie-center"),
@@ -264,8 +263,6 @@ function init() {
     });
   });
 
-  refs.viewTimelineBtn.addEventListener("click", () => setDailyView("timeline"));
-  refs.viewPieBtn.addEventListener("click", () => setDailyView("pie"));
   if (refs.modeDayBtn) {
     refs.modeDayBtn.addEventListener("click", () => setAllocationMode("day"));
   }
@@ -1612,14 +1609,6 @@ function renderAllocationOverview() {
   }
 }
 
-function setDailyView(view) {
-  if (view !== "timeline" && view !== "pie") {
-    return;
-  }
-  state.dailyView = view;
-  renderAllocationOverview();
-}
-
 function applyAllocationMode() {
   const isWeekMode = state.allocationMode === "week";
 
@@ -1628,9 +1617,6 @@ function applyAllocationMode() {
   }
   if (refs.modeWeekBtn) {
     refs.modeWeekBtn.classList.toggle("is-active", isWeekMode);
-  }
-  if (refs.allocationViewSwitch) {
-    refs.allocationViewSwitch.classList.toggle("is-hidden", isWeekMode);
   }
   if (refs.selectedDate) {
     refs.selectedDate.classList.toggle("is-hidden", isWeekMode);
@@ -1647,7 +1633,9 @@ function applyAllocationMode() {
 
   if (isWeekMode) {
     refs.timeline.classList.add("is-hidden");
-    refs.pieWrapper.classList.add("is-hidden");
+    if (refs.pieWrapper) {
+      refs.pieWrapper.classList.add("is-hidden");
+    }
     refs.timelineLegend.classList.remove("is-hidden");
     hidePieTooltip();
     return;
@@ -1659,19 +1647,12 @@ function applyAllocationMode() {
   if (refs.weekBarsScroll) {
     refs.weekBarsScroll.classList.add("is-hidden");
   }
-  applyDailyViewMode();
-}
-
-function applyDailyViewMode() {
-  const showTimeline = state.dailyView === "timeline";
-  refs.timeline.classList.toggle("is-hidden", !showTimeline);
-  refs.timelineLegend.classList.toggle("is-hidden", !showTimeline);
-  refs.pieWrapper.classList.toggle("is-hidden", showTimeline);
-  refs.viewTimelineBtn.classList.toggle("is-active", showTimeline);
-  refs.viewPieBtn.classList.toggle("is-active", !showTimeline);
-  if (showTimeline) {
-    hidePieTooltip();
+  refs.timeline.classList.remove("is-hidden");
+  refs.timelineLegend.classList.remove("is-hidden");
+  if (refs.pieWrapper) {
+    refs.pieWrapper.classList.add("is-hidden");
   }
+  hidePieTooltip();
 }
 
 function renderBoard() {
@@ -2029,7 +2010,6 @@ function renderDailyOverview() {
   refs.summaryUsed.textContent = formatDuration(stats.usedMinutes);
   refs.summaryFree.textContent = formatDuration(stats.freeMinutes);
   renderLegend(stats.categoryTotals, stats.freeMinutes);
-  renderTaskPie(stats.taskTotals, stats.usedMinutes);
   applyAllocationMode();
 }
 
@@ -2352,6 +2332,9 @@ function renderTaskPie(taskTotals, usedMinutes) {
 }
 
 function bindPieInteractions() {
+  if (!refs.taskPie) {
+    return;
+  }
   refs.taskPie.addEventListener("mousemove", onPiePointerMove);
   refs.taskPie.addEventListener("mouseleave", clearPieHover);
 }
@@ -2457,6 +2440,9 @@ function showPieTooltip(event, segment) {
 }
 
 function hidePieTooltip() {
+  if (!refs.pieTooltip) {
+    return;
+  }
   refs.pieTooltip.classList.add("is-hidden");
 }
 
