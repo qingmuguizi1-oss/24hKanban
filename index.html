@@ -111,8 +111,8 @@
 
           <label>
             <div id="optional-tag-switch" class="optional-tag-switch" role="group" aria-label="状态标签类型切换">
-              <button id="switch-mood" type="button" class="optional-tag-switch-btn is-active">状态/心情</button>
-              <button id="switch-process" type="button" class="optional-tag-switch-btn">过程表现</button>
+              <button id="switch-mood" type="button" class="optional-tag-switch-btn is-active">状态</button>
+              <button id="switch-process" type="button" class="optional-tag-switch-btn">过程</button>
             </div>
             <div id="panel-mood" class="mood-input-row">
               <select id="task-mood">
@@ -128,11 +128,11 @@
             <div id="panel-process" class="mood-input-row is-hidden">
               <select id="task-process">
                 <option value="" selected>（可选，不设置）</option>
-                <option value="very_smooth">😄 非常顺利</option>
-                <option value="fairly_smooth">🙂 较为顺利</option>
+                <option value="very_smooth">😄 很顺</option>
+                <option value="fairly_smooth">🙂 较顺</option>
                 <option value="normal">😐 一般</option>
-                <option value="fairly_unsmooth">😣 较为不顺</option>
-                <option value="very_unsmooth">😭 非常不顺</option>
+                <option value="fairly_unsmooth">😣 较差</option>
+                <option value="very_unsmooth">😭 很差</option>
               </select>
               <input id="task-process-score" type="number" min="0" max="100" step="1" placeholder="____" aria-label="过程表现分数">
             </div>
@@ -308,7 +308,11 @@
     </article>
   </template>
 
+  <canvas id="completion-confetti-canvas" aria-hidden="true"></canvas>
+  <audio id="fixed-task-completion-sound" src="sounds/completion-fixed.wav" preload="auto"></audio>
+  <audio id="random-task-completion-sound" preload="auto"></audio>
+
   <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
-  <script src="app.js?v=20260309-7"></script>
+  <script src="app.js?v=20260309-9"></script>
 </body>
 </html>

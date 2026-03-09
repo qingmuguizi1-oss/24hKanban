@@ -111,6 +111,22 @@ const DONE_TIME_GROUPS = [
 const SLOT_MINUTES = 30;
 const PIE_COLORS = ["#d26a2d", "#4f63c6", "#d94f7f", "#2f9a72", "#b57d1d", "#7f5abf", "#3c79c3", "#66758d", "#b2562d", "#2f7f6d"];
 const PIE_INNER_RADIUS_RATIO = 0.48;
+const TASK_COMPLETION_FIXED_SOUND_SRC = "sounds/completion-fixed.wav";
+const TASK_COMPLETION_RANDOM_SOUND_FILES = [
+  "sounds/sound1.wav",
+  "sounds/sound2.wav",
+  "sounds/sound3.wav",
+  "sounds/sound4.wav",
+  "sounds/sound5.wav",
+  "sounds/sound6.wav",
+  "sounds/sound7.wav",
+  "sounds/sound8.wav",
+  "sounds/sound9.wav",
+  "sounds/sound10.wav",
+  "sounds/sound11.wav",
+  "sounds/sound12.wav"
+];
+const TASK_COMPLETION_CONFETTI_COLORS = ["#f94144", "#f3722c", "#f8961e", "#f9c74f", "#90be6d", "#43aa8b", "#577590", "#9b5de5"];
 
 const state = {
   tasks: [],
@@ -181,7 +197,10 @@ const refs = {
   countDoing: document.getElementById("count-doing"),
   countDone: document.getElementById("count-done"),
   quickAddButtons: document.querySelectorAll(".column-add"),
-  template: document.getElementById("task-card-template")
+  template: document.getElementById("task-card-template"),
+  completionConfettiCanvas: document.getElementById("completion-confetti-canvas"),
+  fixedTaskCompletionSound: document.getElementById("fixed-task-completion-sound"),
+  randomTaskCompletionSound: document.getElementById("random-task-completion-sound")
 };
 
 const authRefs = {
@@ -223,6 +242,10 @@ const cloudSyncState = {
   activeUid: "",
   syncTimerId: null,
   syncInFlight: false
+};
+const completionFxState = {
+  particles: [],
+  animationId: 0
 };
 
 init();
@@ -272,6 +295,7 @@ function init() {
   bindWeekBarsScrollEvents();
 
   bindPieInteractions();
+  initializeTaskCompletionEffects();
   setSelectedCategoriesToForm([]);
   setSelectedImportanceLevelToForm(DEFAULT_IMPORTANCE_LEVEL);
   handlePriorityChange();
@@ -280,6 +304,170 @@ function init() {
   updateDurationPreview();
   renderAll();
   initEmailCodeLogin();
+}
+
+function initializeTaskCompletionEffects() {
+  if (refs.completionConfettiCanvas) {
+    resizeTaskCompletionConfettiCanvas();
+    window.addEventListener("resize", resizeTaskCompletionConfettiCanvas);
+  }
+  if (refs.fixedTaskCompletionSound) {
+    refs.fixedTaskCompletionSound.src = TASK_COMPLETION_FIXED_SOUND_SRC;
+    refs.fixedTaskCompletionSound.preload = "auto";
+  }
+  if (refs.randomTaskCompletionSound) {
+    refs.randomTaskCompletionSound.preload = "auto";
+  }
+}
+
+function triggerTaskCompletionCelebration() {
+  triggerTaskCompletionConfetti();
+  playTaskCompletionSounds();
+}
+
+function playTaskCompletionSounds() {
+  if (refs.fixedTaskCompletionSound) {
+    refs.fixedTaskCompletionSound.volume = 0.15;
+    refs.fixedTaskCompletionSound.currentTime = 0;
+    const fixedPromise = refs.fixedTaskCompletionSound.play();
+    if (fixedPromise && typeof fixedPromise.catch === "function") {
+      fixedPromise.catch(() => {});
+    }
+  }
+
+  if (refs.randomTaskCompletionSound && TASK_COMPLETION_RANDOM_SOUND_FILES.length) {
+    const randomIndex = Math.floor(Math.random() * TASK_COMPLETION_RANDOM_SOUND_FILES.length);
+    refs.randomTaskCompletionSound.src = TASK_COMPLETION_RANDOM_SOUND_FILES[randomIndex];
+    refs.randomTaskCompletionSound.currentTime = 0;
+    const randomPromise = refs.randomTaskCompletionSound.play();
+    if (randomPromise && typeof randomPromise.catch === "function") {
+      randomPromise.catch(() => {});
+    }
+  }
+}
+
+function resizeTaskCompletionConfettiCanvas() {
+  if (!refs.completionConfettiCanvas) {
+    return;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.floor(window.innerWidth * dpr);
+  const height = Math.floor(window.innerHeight * dpr);
+  refs.completionConfettiCanvas.width = width;
+  refs.completionConfettiCanvas.height = height;
+  refs.completionConfettiCanvas.style.width = `${window.innerWidth}px`;
+  refs.completionConfettiCanvas.style.height = `${window.innerHeight}px`;
+}
+
+function triggerTaskCompletionConfetti() {
+  if (!refs.completionConfettiCanvas) {
+    return;
+  }
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  resizeTaskCompletionConfettiCanvas();
+  spawnTaskCompletionConfettiBurst(150, 0.5, 0.62, -135, -45, 6, 12);
+  spawnTaskCompletionConfettiBurst(50, 0.02, 0.78, -72, -28, 5, 11);
+  spawnTaskCompletionConfettiBurst(50, 0.98, 0.78, -152, -108, 5, 11);
+  startTaskCompletionConfettiLoop();
+}
+
+function spawnTaskCompletionConfettiBurst(count, originXRatio, originYRatio, minAngleDeg, maxAngleDeg, minSpeed, maxSpeed) {
+  if (!refs.completionConfettiCanvas || count <= 0) {
+    return;
+  }
+  const width = refs.completionConfettiCanvas.width;
+  const height = refs.completionConfettiCanvas.height;
+  const startX = width * originXRatio;
+  const startY = height * originYRatio;
+
+  for (let i = 0; i < count; i += 1) {
+    const angleDeg = minAngleDeg + Math.random() * (maxAngleDeg - minAngleDeg);
+    const angle = (angleDeg * Math.PI) / 180;
+    const speed = minSpeed + Math.random() * (maxSpeed - minSpeed);
+    const life = 56 + Math.floor(Math.random() * 36);
+    completionFxState.particles.push({
+      x: startX,
+      y: startY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      size: 6 + Math.random() * 6,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: -0.18 + Math.random() * 0.36,
+      gravity: 0.22 + Math.random() * 0.08,
+      drag: 0.987 + Math.random() * 0.008,
+      life,
+      maxLife: life,
+      color: TASK_COMPLETION_CONFETTI_COLORS[Math.floor(Math.random() * TASK_COMPLETION_CONFETTI_COLORS.length)],
+      shape: Math.random() > 0.22 ? "rect" : "circle"
+    });
+  }
+}
+
+function startTaskCompletionConfettiLoop() {
+  if (completionFxState.animationId) {
+    return;
+  }
+  completionFxState.animationId = window.requestAnimationFrame(stepTaskCompletionConfetti);
+}
+
+function stepTaskCompletionConfetti() {
+  if (!refs.completionConfettiCanvas) {
+    completionFxState.animationId = 0;
+    completionFxState.particles = [];
+    return;
+  }
+
+  const ctx = refs.completionConfettiCanvas.getContext("2d");
+  if (!ctx) {
+    completionFxState.animationId = 0;
+    completionFxState.particles = [];
+    return;
+  }
+
+  ctx.clearRect(0, 0, refs.completionConfettiCanvas.width, refs.completionConfettiCanvas.height);
+  const width = refs.completionConfettiCanvas.width;
+  const height = refs.completionConfettiCanvas.height;
+  const nextParticles = [];
+
+  completionFxState.particles.forEach((particle) => {
+    particle.vx *= particle.drag;
+    particle.vy = particle.vy * particle.drag + particle.gravity;
+    particle.x += particle.vx;
+    particle.y += particle.vy;
+    particle.rotation += particle.rotationSpeed;
+    particle.life -= 1;
+
+    const alpha = Math.max(0, particle.life / particle.maxLife);
+    const inBounds = particle.x > -80 && particle.x < width + 80 && particle.y < height + 100;
+    if (particle.life > 0 && inBounds) {
+      ctx.save();
+      ctx.translate(particle.x, particle.y);
+      ctx.rotate(particle.rotation);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = particle.color;
+      if (particle.shape === "circle") {
+        ctx.beginPath();
+        ctx.arc(0, 0, particle.size * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-particle.size * 0.5, -particle.size * 0.26, particle.size, particle.size * 0.52);
+      }
+      ctx.restore();
+      nextParticles.push(particle);
+    }
+  });
+
+  completionFxState.particles = nextParticles;
+  if (completionFxState.particles.length) {
+    completionFxState.animationId = window.requestAnimationFrame(stepTaskCompletionConfetti);
+    return;
+  }
+
+  ctx.clearRect(0, 0, refs.completionConfettiCanvas.width, refs.completionConfettiCanvas.height);
+  completionFxState.animationId = 0;
 }
 
 function initEmailCodeLogin() {
@@ -547,16 +735,26 @@ async function bootstrapCloudTaskSync() {
     const localTasks = getNormalizedTaskList(state.tasks);
     const cloudTasks = await pullTasksFromCloud();
     if (Array.isArray(cloudTasks)) {
-      const shouldImportLocal = !hasCloudImportMarker(uid) && localTasks.length > 0;
-      const mergedTasks = shouldImportLocal ? mergeTasksForCloudBootstrap(cloudTasks, localTasks) : cloudTasks;
+      const hasMarker = hasCloudImportMarker(uid);
+      const mergedTasks = mergeTasksForCloudBootstrap(cloudTasks, localTasks);
+      const hasLocalOnlyTasks = hasTasksNotInCloud(cloudTasks, localTasks);
+      const shouldUploadMerged = hasLocalOnlyTasks || (!hasMarker && localTasks.length > 0);
+
+      console.info("[cloud-sync] bootstrap task snapshot", {
+        localCount: localTasks.length,
+        cloudCount: cloudTasks.length,
+        hasMarker,
+        hasLocalOnlyTasks,
+        shouldUploadMerged
+      });
 
       state.tasks = mergedTasks;
       saveTasks({ skipCloudSync: true });
       renderAll();
 
-      if (shouldImportLocal) {
+      if (shouldUploadMerged) {
         const uploaded = await syncTasksToCloud({ immediate: true });
-        if (uploaded) {
+        if (uploaded && localTasks.length > 0) {
           setCloudImportMarker(uid);
         }
       }
@@ -589,6 +787,13 @@ function mergeTasksForCloudBootstrap(cloudTasks, localTasks) {
     }
   });
   return Array.from(mergedById.values());
+}
+
+function hasTasksNotInCloud(cloudTasks, localTasks) {
+  const cloudIds = new Set(
+    getNormalizedTaskList(cloudTasks).map((task) => task.id)
+  );
+  return getNormalizedTaskList(localTasks).some((task) => !cloudIds.has(task.id));
 }
 
 function getCloudImportMarkerKey(uid) {
@@ -1480,6 +1685,7 @@ function onSubmitTask(event) {
   const selectedMood = getSelectedMoodFromForm();
   const selectedProcess = getSelectedProcessFromForm();
   const existingTask = state.tasks.find((item) => item.id === refs.taskId.value);
+  const shouldCelebrateCompletion = Boolean(existingTask && existingTask.status !== "done" && refs.taskStatus.value === "done");
   const task = {
     id: refs.taskId.value || createTaskId(),
     name: refs.taskName.value.trim(),
@@ -1543,6 +1749,9 @@ function onSubmitTask(event) {
   }
 
   saveTasks();
+  if (shouldCelebrateCompletion) {
+    triggerTaskCompletionCelebration();
+  }
   if (refs.taskCategoryPicker) {
     refs.taskCategoryPicker.open = false;
   }
@@ -1875,8 +2084,13 @@ function createTaskCard(task) {
   const statusSelect = fragment.querySelector(".card-status");
   statusSelect.value = task.status;
   statusSelect.addEventListener("change", (event) => {
-    task.status = event.target.value;
+    const previousStatus = task.status;
+    const nextStatus = event.target.value;
+    task.status = nextStatus;
     saveTasks();
+    if (nextStatus === "done" && previousStatus !== "done") {
+      triggerTaskCompletionCelebration();
+    }
     renderAll();
   });
 
