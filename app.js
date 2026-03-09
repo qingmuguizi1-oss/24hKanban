@@ -1,5 +1,6 @@
 const STORAGE_KEY = "time-efficiency-tasks-v1";
 const CLOUD_IMPORT_MARKER_PREFIX = "time-efficiency-cloud-imported";
+const VOICE_EFFECTS_STORAGE_KEY = "time-efficiency-voice-effects-enabled";
 
 const CLOUDBASE_ENV_ID = "jieyou-3gr01mvob9ad92de";
 const CLOUDBASE_TASKS_COLLECTION = "time_efficiency_user_tasks";
@@ -132,6 +133,7 @@ const state = {
   tasks: [],
   selectedDate: toDateInputValue(new Date()),
   boardDate: toDateInputValue(new Date()),
+  voiceEffectsEnabled: true,
   optionalTagMode: DEFAULT_OPTIONAL_TAG_MODE,
   allocationMode: "day",
   dailyView: "timeline",
@@ -209,6 +211,7 @@ const authRefs = {
   menuWrap: document.getElementById("global-menu"),
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuDropdown: document.getElementById("menu-dropdown"),
+  menuVoiceToggle: document.getElementById("menu-voice-toggle"),
   menuAuthBtn: document.getElementById("menu-auth-btn"),
   menuAccountValue: document.getElementById("menu-account-value"),
   loginCloseBtn: document.getElementById("login-close-btn"),
@@ -252,6 +255,7 @@ init();
 
 function init() {
   state.tasks = loadTasks();
+  setVoiceEffectsEnabled(loadVoiceEffectsPreference(), { skipPersist: true });
   refs.selectedDate.value = state.selectedDate;
   refs.boardDate.value = state.boardDate;
 
@@ -318,6 +322,59 @@ function initializeTaskCompletionEffects() {
   if (refs.randomTaskCompletionSound) {
     refs.randomTaskCompletionSound.preload = "auto";
   }
+  setVoiceEffectsEnabled(state.voiceEffectsEnabled, { skipPersist: true });
+}
+
+function loadVoiceEffectsPreference() {
+  try {
+    const raw = localStorage.getItem(VOICE_EFFECTS_STORAGE_KEY);
+    if (raw === "0" || raw === "false") {
+      return false;
+    }
+    if (raw === "1" || raw === "true") {
+      return true;
+    }
+  } catch {
+    // ignore preference read failures
+  }
+  return true;
+}
+
+function saveVoiceEffectsPreference(enabled) {
+  try {
+    localStorage.setItem(VOICE_EFFECTS_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // ignore preference write failures
+  }
+}
+
+function setVoiceEffectsEnabled(enabled, options = {}) {
+  const nextValue = Boolean(enabled);
+  state.voiceEffectsEnabled = nextValue;
+
+  if (authRefs.menuVoiceToggle) {
+    authRefs.menuVoiceToggle.checked = nextValue;
+  }
+
+  const muted = !nextValue;
+  if (refs.fixedTaskCompletionSound) {
+    refs.fixedTaskCompletionSound.muted = muted;
+    if (muted) {
+      refs.fixedTaskCompletionSound.pause();
+      refs.fixedTaskCompletionSound.currentTime = 0;
+    }
+  }
+  if (refs.randomTaskCompletionSound) {
+    refs.randomTaskCompletionSound.muted = muted;
+    if (muted) {
+      refs.randomTaskCompletionSound.pause();
+      refs.randomTaskCompletionSound.currentTime = 0;
+    }
+  }
+
+  if (!options.skipPersist) {
+    saveVoiceEffectsPreference(nextValue);
+  }
 }
 
 function triggerTaskCompletionCelebration() {
@@ -326,6 +383,10 @@ function triggerTaskCompletionCelebration() {
 }
 
 function playTaskCompletionSounds() {
+  if (!state.voiceEffectsEnabled) {
+    return;
+  }
+
   if (refs.fixedTaskCompletionSound) {
     refs.fixedTaskCompletionSound.volume = 0.15;
     refs.fixedTaskCompletionSound.currentTime = 0;
@@ -544,6 +605,11 @@ function bindGlobalMenuEvents() {
   if (authRefs.menuAuthBtn) {
     authRefs.menuAuthBtn.addEventListener("click", () => {
       void handleMenuAuthAction();
+    });
+  }
+  if (authRefs.menuVoiceToggle) {
+    authRefs.menuVoiceToggle.addEventListener("change", (event) => {
+      setVoiceEffectsEnabled(Boolean(event.target.checked));
     });
   }
 

@@ -14,6 +14,13 @@
         <p class="menu-account-label">当前账号</p>
         <p id="menu-account-value" class="menu-account-value">未登录</p>
       </div>
+      <div class="menu-toggle-row" role="menuitem">
+        <span class="menu-toggle-label">语音效果</span>
+        <label class="menu-toggle-switch" for="menu-voice-toggle">
+          <input id="menu-voice-toggle" type="checkbox" aria-label="语音效果开关" checked>
+          <span class="menu-toggle-slider" aria-hidden="true"></span>
+        </label>
+      </div>
       <div class="menu-divider" aria-hidden="true"></div>
       <button id="menu-auth-btn" type="button" class="menu-action-btn" role="menuitem">登录</button>
     </div>
@@ -313,6 +320,6 @@
   <audio id="random-task-completion-sound" preload="auto"></audio>
 
   <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
-  <script src="app.js?v=20260309-9"></script>
+  <script src="app.js?v=20260309-10"></script>
 </body>
 </html>

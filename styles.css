@@ -886,6 +886,74 @@ button.danger {
   overflow-wrap: anywhere;
 }
 
+.menu-toggle-row {
+  margin: 0 8px 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(162, 152, 137, 0.22);
+  background: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.menu-toggle-label {
+  color: #39414f;
+  font-size: 0.9rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 600;
+}
+
+.menu-toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  display: inline-flex;
+}
+
+.menu-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.menu-toggle-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(159, 166, 177, 0.75);
+  border: 1px solid rgba(141, 149, 161, 0.56);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.menu-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(45, 52, 64, 0.24);
+  transition: transform 0.2s ease;
+}
+
+.menu-toggle-switch input:checked + .menu-toggle-slider {
+  background: #ce7b3f;
+  border-color: #b9682f;
+}
+
+.menu-toggle-switch input:checked + .menu-toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.menu-toggle-switch input:focus-visible + .menu-toggle-slider {
+  box-shadow: 0 0 0 3px rgba(206, 123, 63, 0.28);
+}
+
 .menu-divider {
   height: 1px;
   background: rgba(167, 167, 167, 0.3);
