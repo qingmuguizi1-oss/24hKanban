@@ -298,6 +298,13 @@ small {
   gap: 6px;
 }
 
+.category-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .group-label {
   font-weight: 600;
   font-size: 0.93rem;
@@ -371,6 +378,21 @@ small {
 
 .category-item input {
   accent-color: #b55e2d;
+}
+
+.category-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 10px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.category-manage-trigger {
+  align-self: auto;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 0.82rem;
 }
 
 .importance-level-group {
@@ -827,6 +849,137 @@ button.danger {
 
 .is-hidden {
   display: none !important;
+}
+
+.category-manager-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(47, 32, 22, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.category-manager-dialog {
+  width: min(820px, 100%);
+  max-height: min(82vh, 760px);
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(168, 121, 78, 0.34);
+  background: rgba(255, 247, 231, 0.98);
+  box-shadow: 0 20px 44px rgba(55, 35, 17, 0.32);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.category-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.category-manager-head h3 {
+  margin: 0;
+  color: #4f3525;
+  font-size: 1.12rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.category-manager-note {
+  margin: 0;
+  color: #745947;
+  font-size: 0.88rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.category-manager-list {
+  display: grid;
+  gap: 8px;
+}
+
+.category-manager-item {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 164px auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(160, 116, 74, 0.25);
+  background: rgba(255, 252, 245, 0.88);
+}
+
+.category-manager-color {
+  width: 34px;
+  height: 30px;
+  border: 1px solid rgba(149, 106, 66, 0.4);
+  border-radius: 8px;
+  padding: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.category-manager-name {
+  min-width: 0;
+}
+
+.category-manager-key {
+  color: #856650;
+  font-size: 0.78rem;
+  font-family: "JetBrains Mono", "Consolas", monospace;
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-manager-key-wrap {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  justify-self: end;
+  width: 164px;
+  gap: 6px;
+}
+
+.category-manager-drag-handle {
+  border: 1px solid rgba(158, 112, 70, 0.32);
+  background: rgba(255, 248, 233, 0.84);
+  color: #7a5b45;
+  border-radius: 8px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 6px;
+  line-height: 1;
+  font-size: 0.82rem;
+  cursor: grab;
+  justify-self: center;
+}
+
+.category-manager-drag-handle:active {
+  cursor: grabbing;
+}
+
+.category-manager-item.is-drag-over {
+  border-color: rgba(191, 111, 53, 0.58);
+  box-shadow: 0 0 0 2px rgba(206, 136, 83, 0.2);
+}
+
+.category-manager-item.is-dragging {
+  opacity: 0.62;
+}
+
+.category-manager-delete {
+  justify-self: flex-end;
+}
+
+.category-manager-actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 #completion-confetti-canvas {
@@ -1463,11 +1616,48 @@ button.danger {
     padding: 24px 16px;
   }
 
+  .category-manager-item {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "color name delete"
+      "key key key";
+  }
+
+  .category-manager-color {
+    grid-area: color;
+  }
+
+  .category-manager-name {
+    grid-area: name;
+  }
+
+  .category-manager-key-wrap {
+    grid-area: key;
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .category-manager-key {
+    text-align: left;
+  }
+
+  .category-manager-delete {
+    grid-area: delete;
+  }
+
 }
 
 @media (max-width: 720px) {
   .app {
     padding: 16px 12px 18px;
+  }
+
+  .category-group-head {
+    flex-wrap: wrap;
+  }
+
+  .category-manage-trigger {
+    margin-left: auto;
   }
 
   .two-col,

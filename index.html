@@ -165,24 +165,13 @@
 
         <div class="two-col">
           <div class="category-group">
-            <span class="group-label">任务类别（可多选）</span>
+            <div class="category-group-head">
+              <span class="group-label">任务类别（可多选）</span>
+              <button type="button" id="open-category-manager-form" class="secondary category-manage-trigger">管理类别与颜色</button>
+            </div>
             <details id="task-category-picker" class="category-picker">
               <summary id="task-category-summary" class="category-summary is-empty">请选择任务类别</summary>
-              <div class="category-checklist" id="task-category-group">
-                <label class="category-item"><input type="checkbox" name="task-categories" value="work"><span>&#x1F4BC; &#24037;&#20316;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="explore"><span>&#x1F6A2; &#25506;&#32034;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="topic"><span>&#x1F4DA; &#35838;&#39064;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="dev"><span>&#x1F4BB; &#24320;&#21457;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="inspiration"><span>&#x1F4A1; &#28789;&#24863;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="study"><span>&#x1F4D8; &#23398;&#20064;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="sport"><span>&#x1F3C3; &#36816;&#21160;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="relax"><span>&#x1F9D8; &#25918;&#26494;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="sleep"><span>&#x1F634; &#30561;&#35273;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="meal"><span>&#x1F37D; &#29992;&#39184;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="record"><span>&#x1F4DD; &#35760;&#24405;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="entertainment"><span>&#x1F3AE; &#23089;&#20048;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="other"><span>&#x1F9E9; &#20854;&#20182;</span></label>
-              </div>
+              <div class="category-checklist" id="task-category-group"></div>
             </details>
           </div>
 
@@ -278,6 +267,20 @@
       </div>
     </section>
   </main>
+
+  <div id="category-manager-modal" class="category-manager-modal is-hidden" aria-hidden="true">
+    <div id="category-manager-dialog" class="category-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
+      <div class="category-manager-head">
+        <h3 id="category-manager-title">任务类别管理</h3>
+        <button type="button" id="close-category-manager-btn" class="secondary">关闭</button>
+      </div>
+      <p class="category-manager-note">可新增/删除类别，并设置其在“每日24h分配”中的颜色。</p>
+      <div id="category-manager-list" class="category-manager-list"></div>
+      <div class="category-manager-actions">
+        <button type="button" id="add-category-btn" class="secondary">新增类别</button>
+      </div>
+    </div>
+  </div>
 
   <template id="task-card-template">
     <article class="task-card is-collapsed">
