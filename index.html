@@ -1,4 +1,4 @@
-﻿﻿<!doctype html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -15,12 +15,16 @@
         <p id="menu-account-value" class="menu-account-value">未登录</p>
       </div>
       <div class="menu-toggle-row" role="menuitem">
-        <span class="menu-toggle-label">语音效果</span>
+        <span class="menu-toggle-label">🔊 语音效果</span>
         <label class="menu-toggle-switch" for="menu-voice-toggle">
           <input id="menu-voice-toggle" type="checkbox" aria-label="语音效果开关" checked>
           <span class="menu-toggle-slider" aria-hidden="true"></span>
         </label>
       </div>
+      <button id="menu-bedtime-review-btn" type="button" class="menu-nav-row" role="menuitem">
+        <span class="menu-toggle-label">🌙 睡前回顾</span>
+        <span class="menu-nav-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="menu-divider" aria-hidden="true"></div>
       <button id="menu-auth-btn" type="button" class="menu-action-btn" role="menuitem">登录</button>
     </div>
@@ -123,7 +127,7 @@
             </div>
             <div id="panel-mood" class="mood-input-row">
               <select id="task-mood">
-                <option value="" selected>（可选，不设置）</option>
+                <option value="" selected>（选填）</option>
                 <option value="excited">🤩 兴奋</option>
                 <option value="relaxed">😌 轻松</option>
                 <option value="okay">🙂 尚可</option>
@@ -134,7 +138,7 @@
             </div>
             <div id="panel-process" class="mood-input-row is-hidden">
               <select id="task-process">
-                <option value="" selected>（可选，不设置）</option>
+                <option value="" selected>（选填）</option>
                 <option value="very_smooth">😄 很顺</option>
                 <option value="fairly_smooth">🙂 较顺</option>
                 <option value="normal">😐 一般</option>
@@ -267,6 +271,27 @@
       </div>
     </section>
   </main>
+
+  <section id="bedtime-review-page" class="app bedtime-review-page is-hidden" aria-hidden="true">
+    <header class="app-header bedtime-review-header">
+      <h1>睡前回顾</h1>
+      <p>按时间分类回顾：紧急且重要、以及过程较差/很差的任务。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>回顾范围</h2>
+        <div class="head-tools bedtime-review-week-tools">
+          <button id="bedtime-review-prev-week-btn" type="button" class="secondary">&lt;</button>
+          <span id="bedtime-review-week-display" class="selected-week">第--周</span>
+          <button id="bedtime-review-next-week-btn" type="button" class="secondary">&gt;</button>
+          <button id="bedtime-review-back-btn" type="button" class="secondary">返回看板</button>
+        </div>
+      </div>
+      <div id="bedtime-review-summary" class="summary-row"></div>
+      <div id="bedtime-review-groups" class="bedtime-review-groups"></div>
+    </section>
+  </section>
 
   <div id="category-manager-modal" class="category-manager-modal is-hidden" aria-hidden="true">
     <div id="category-manager-dialog" class="category-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">

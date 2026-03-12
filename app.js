@@ -97,6 +97,8 @@ const DONE_TIME_GROUPS = [
   { key: "afternoon", label: "\u4E0B\u5348" },
   { key: "evening", label: "\u665A\u4E0A" }
 ];
+const BEDTIME_REVIEW_BAD_PROCESS_KEYS = new Set(["fairly_unsmooth", "very_unsmooth"]);
+const BEDTIME_REVIEW_WEEKDAY_LABELS = ["\u5468\u4E00", "\u5468\u4E8C", "\u5468\u4E09", "\u5468\u56DB", "\u5468\u4E94", "\u5468\u516D", "\u5468\u65E5"];
 
 const SLOT_MINUTES = 30;
 const PIE_COLORS = ["#d26a2d", "#4f63c6", "#d94f7f", "#2f9a72", "#b57d1d", "#7f5abf", "#3c79c3", "#66758d", "#b2562d", "#2f7f6d"];
@@ -123,6 +125,8 @@ const state = {
   categoryDefinitions: [],
   selectedDate: toDateInputValue(new Date()),
   boardDate: toDateInputValue(new Date()),
+  bedtimeReviewDate: toDateInputValue(new Date()),
+  activePage: "dashboard",
   voiceEffectsEnabled: true,
   optionalTagMode: DEFAULT_OPTIONAL_TAG_MODE,
   allocationMode: "day",
@@ -174,6 +178,13 @@ const refs = {
   taskStatus: document.getElementById("task-status"),
   durationPreview: document.getElementById("duration-preview"),
   resetForm: document.getElementById("reset-form"),
+  bedtimeReviewPage: document.getElementById("bedtime-review-page"),
+  bedtimeReviewWeekDisplay: document.getElementById("bedtime-review-week-display"),
+  bedtimeReviewPrevWeekBtn: document.getElementById("bedtime-review-prev-week-btn"),
+  bedtimeReviewNextWeekBtn: document.getElementById("bedtime-review-next-week-btn"),
+  bedtimeReviewSummary: document.getElementById("bedtime-review-summary"),
+  bedtimeReviewGroups: document.getElementById("bedtime-review-groups"),
+  bedtimeReviewBackBtn: document.getElementById("bedtime-review-back-btn"),
   selectedDate: document.getElementById("selected-date"),
   selectedWeek: document.getElementById("selected-week"),
   modeDayBtn: document.getElementById("mode-day"),
@@ -209,6 +220,7 @@ const authRefs = {
   menuToggleBtn: document.getElementById("menu-toggle-btn"),
   menuDropdown: document.getElementById("menu-dropdown"),
   menuVoiceToggle: document.getElementById("menu-voice-toggle"),
+  menuBedtimeReviewBtn: document.getElementById("menu-bedtime-review-btn"),
   menuAuthBtn: document.getElementById("menu-auth-btn"),
   menuAccountValue: document.getElementById("menu-account-value"),
   loginCloseBtn: document.getElementById("login-close-btn"),
@@ -281,6 +293,21 @@ function init() {
     state.boardDate = refs.boardDate.value;
     renderBoard();
   });
+  if (refs.bedtimeReviewPrevWeekBtn) {
+    refs.bedtimeReviewPrevWeekBtn.addEventListener("click", () => {
+      shiftBedtimeReviewWeek(-1);
+    });
+  }
+  if (refs.bedtimeReviewNextWeekBtn) {
+    refs.bedtimeReviewNextWeekBtn.addEventListener("click", () => {
+      shiftBedtimeReviewWeek(1);
+    });
+  }
+  if (refs.bedtimeReviewBackBtn) {
+    refs.bedtimeReviewBackBtn.addEventListener("click", () => {
+      setActivePage("dashboard");
+    });
+  }
 
   refs.quickAddButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -307,6 +334,7 @@ function init() {
   updateDetailCount();
   updateDurationPreview();
   renderAll();
+  updateActivePageView();
   initEmailCodeLogin();
 }
 
@@ -607,6 +635,11 @@ function bindGlobalMenuEvents() {
       void handleMenuAuthAction();
     });
   }
+  if (authRefs.menuBedtimeReviewBtn) {
+    authRefs.menuBedtimeReviewBtn.addEventListener("click", () => {
+      handleOpenBedtimeReviewFromMenu();
+    });
+  }
   if (authRefs.menuVoiceToggle) {
     authRefs.menuVoiceToggle.addEventListener("change", (event) => {
       setVoiceEffectsEnabled(Boolean(event.target.checked));
@@ -621,6 +654,13 @@ function bindGlobalMenuEvents() {
       closeGlobalMenu();
     }
   });
+}
+
+function handleOpenBedtimeReviewFromMenu() {
+  closeGlobalMenu();
+  const preferredDate = (refs.selectedDate && refs.selectedDate.value) || state.selectedDate || toDateInputValue(new Date());
+  state.bedtimeReviewDate = preferredDate;
+  setActivePage("bedtime-review");
 }
 
 async function handleMenuAuthAction() {
@@ -678,11 +718,16 @@ function updateMenuAuthButton() {
     return;
   }
   const loggedIn = Boolean(authState.user && !authState.user.isAnonymous);
-  authRefs.menuAccountValue.textContent = loggedIn
-    ? (authState.user.email || "\u5df2\u767b\u5f55")
+  const email = loggedIn ? String(authState.user.email || "").trim() : "";
+  const accountLabel = loggedIn
+    ? (email || "\u5df2\u767b\u5f55")
     : "\u672a\u767b\u5f55";
+  authRefs.menuAccountValue.textContent = accountLabel;
   authRefs.menuAuthBtn.textContent = loggedIn ? "\u9000\u51fa\u767b\u5f55" : "\u767b\u5f55";
   authRefs.menuAuthBtn.classList.toggle("is-danger", loggedIn);
+  if (accountLabel === "\u672a\u767b\u5f55" || accountLabel === "\u5df2\u767b\u5f55") {
+    openLoginOverlay();
+  }
 }
 
 function renderDailyQuote() {
@@ -1105,6 +1150,29 @@ function showLoginPage() {
 
 function showMainApp() {
   closeLoginOverlay();
+}
+
+function setActivePage(page) {
+  state.activePage = page === "bedtime-review" ? "bedtime-review" : "dashboard";
+  updateActivePageView();
+}
+
+function updateActivePageView() {
+  const showBedtimeReview = state.activePage === "bedtime-review";
+  if (authRefs.mainApp) {
+    authRefs.mainApp.classList.toggle("is-hidden", showBedtimeReview);
+    authRefs.mainApp.setAttribute("aria-hidden", showBedtimeReview ? "true" : "false");
+  }
+  if (refs.bedtimeReviewPage) {
+    refs.bedtimeReviewPage.classList.toggle("is-hidden", !showBedtimeReview);
+    refs.bedtimeReviewPage.setAttribute("aria-hidden", showBedtimeReview ? "false" : "true");
+  }
+  if (authRefs.menuBedtimeReviewBtn) {
+    authRefs.menuBedtimeReviewBtn.classList.toggle("is-active", showBedtimeReview);
+  }
+  if (showBedtimeReview) {
+    renderBedtimeReview();
+  }
 }
 
 function updateLoginView() {
@@ -2506,6 +2574,201 @@ function renderAll() {
   }
   renderBoard();
   renderAllocationOverview();
+  renderBedtimeReview();
+}
+
+function getBedtimeReviewDateValue() {
+  const raw = state.bedtimeReviewDate || toDateInputValue(new Date());
+  return normalizeDateTimeInput(`${raw}T00:00`).slice(0, 10) || toDateInputValue(new Date());
+}
+
+function shiftBedtimeReviewWeek(weekOffset) {
+  const offset = Number(weekOffset);
+  if (!Number.isFinite(offset) || offset === 0) {
+    return;
+  }
+  const base = parseDateTime(`${getBedtimeReviewDateValue()}T00:00`) || new Date();
+  base.setDate(base.getDate() + Math.trunc(offset) * 7);
+  state.bedtimeReviewDate = toDateInputValue(base);
+  renderBedtimeReview();
+}
+
+function getBedtimeReviewReasons(task) {
+  const reasons = [];
+  if (task && task.priority === "important_urgent") {
+    reasons.push("\u7D27\u6025\u4E14\u91CD\u8981");
+  }
+  const processKey = sanitizeProcessKey(task && task.process ? task.process : "");
+  if (BEDTIME_REVIEW_BAD_PROCESS_KEYS.has(processKey)) {
+    reasons.push(processKey === "very_unsmooth" ? "\u8FC7\u7A0B\u5F88\u5DEE" : "\u8FC7\u7A0B\u8F83\u5DEE");
+  }
+  return reasons;
+}
+
+function getBedtimeReviewWeekDays(weekStart) {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Array.from({ length: 7 }, (_, index) => {
+    const start = new Date(weekStart.getTime() + index * dayMs);
+    const end = new Date(start.getTime() + dayMs);
+    return {
+      index,
+      key: toDateInputValue(start),
+      label: BEDTIME_REVIEW_WEEKDAY_LABELS[index] || `\u7B2C${index + 1}\u5929`,
+      start,
+      end
+    };
+  });
+}
+
+function renderBedtimeReview() {
+  if (!refs.bedtimeReviewSummary || !refs.bedtimeReviewGroups || !refs.bedtimeReviewWeekDisplay) {
+    return;
+  }
+
+  const anchorDay = getBedtimeReviewDateValue();
+  state.bedtimeReviewDate = anchorDay;
+
+  const weekRange = getWeekRangeFromDate(anchorDay);
+  const weekInfo = getIsoWeekInfo(weekRange.start);
+  refs.bedtimeReviewWeekDisplay.textContent = `${weekInfo.year}年第${weekInfo.week}周`;
+  refs.bedtimeReviewWeekDisplay.title = `${weekInfo.year}年第${weekInfo.week}周`;
+
+  const weekDays = getBedtimeReviewWeekDays(weekRange.start);
+  const entriesByDay = Object.fromEntries(weekDays.map((day) => [day.key, []]));
+
+  let urgentImportantCount = 0;
+  let badProcessCount = 0;
+  let totalRiskCount = 0;
+
+  state.tasks.forEach((task) => {
+    const range = getTaskRange(task);
+    if (!range) {
+      return;
+    }
+    const overlap = getOverlapMinutes(range.start, range.end, weekRange.start, weekRange.end);
+    if (overlap <= 0) {
+      return;
+    }
+
+    const reasons = getBedtimeReviewReasons(task);
+    if (!reasons.length) {
+      return;
+    }
+
+    if (reasons.includes("\u7D27\u6025\u4E14\u91CD\u8981")) {
+      urgentImportantCount += 1;
+    }
+    if (reasons.includes("\u8FC7\u7A0B\u8F83\u5DEE") || reasons.includes("\u8FC7\u7A0B\u5F88\u5DEE")) {
+      badProcessCount += 1;
+    }
+    totalRiskCount += 1;
+
+    weekDays.forEach((day) => {
+      const dayOverlap = getOverlapMinutes(range.start, range.end, day.start, day.end);
+      if (dayOverlap <= 0) {
+        return;
+      }
+      entriesByDay[day.key].push({ task, reasons });
+    });
+  });
+
+  Object.values(entriesByDay).forEach((items) => {
+    items.sort((left, right) => {
+      const leftTime = parseDateTime(left.task.startAt);
+      const rightTime = parseDateTime(right.task.startAt);
+      const leftTs = leftTime ? leftTime.getTime() : Number.MAX_SAFE_INTEGER;
+      const rightTs = rightTime ? rightTime.getTime() : Number.MAX_SAFE_INTEGER;
+      return leftTs - rightTs;
+    });
+  });
+
+  refs.bedtimeReviewSummary.innerHTML = "";
+  const summaryItems = [
+    { label: "\u603B\u9700\u56DE\u987E", value: String(totalRiskCount) },
+    { label: "\u7D27\u6025\u4E14\u91CD\u8981", value: String(urgentImportantCount) },
+    { label: "\u8FC7\u7A0B\u8F83\u5DEE/\u5F88\u5DEE", value: String(badProcessCount) }
+  ];
+  summaryItems.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "summary-item";
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    const value = document.createElement("strong");
+    value.textContent = item.value;
+    card.appendChild(label);
+    card.appendChild(value);
+    refs.bedtimeReviewSummary.appendChild(card);
+  });
+
+  refs.bedtimeReviewGroups.innerHTML = "";
+  weekDays.forEach((day) => {
+    const items = entriesByDay[day.key] || [];
+
+    const section = document.createElement("details");
+    section.className = "bedtime-review-group";
+
+    const heading = document.createElement("summary");
+    heading.className = "bedtime-review-group-summary";
+    heading.textContent = `${day.label} ${day.key} (${items.length})`;
+    section.appendChild(heading);
+
+    const list = document.createElement("div");
+    list.className = "bedtime-review-list";
+
+    if (!items.length) {
+      const emptyDay = document.createElement("p");
+      emptyDay.className = "bedtime-review-day-empty";
+      emptyDay.textContent = "\u5F53\u65E5\u65E0\u5165\u56F4\u4EFB\u52A1";
+      list.appendChild(emptyDay);
+      section.appendChild(list);
+      refs.bedtimeReviewGroups.appendChild(section);
+      return;
+    }
+
+    items.forEach((entry) => {
+      const card = document.createElement("article");
+      card.className = "bedtime-review-item";
+
+      const title = document.createElement("h4");
+      title.textContent = entry.task.name || "\u672A\u547D\u540D\u4EFB\u52A1";
+
+      const meta = document.createElement("p");
+      meta.className = "bedtime-review-meta";
+      meta.textContent = `${formatCardTimeRange(entry.task.startAt, entry.task.endAt)} | ${getCategoryLabels(entry.task)} | ${formatDuration(getDurationMinutes(entry.task.startAt, entry.task.endAt))}`;
+
+      const tags = document.createElement("div");
+      tags.className = "bedtime-review-tags";
+      entry.reasons.forEach((reason) => {
+        const tag = document.createElement("span");
+        tag.className = "bedtime-review-tag";
+        tag.textContent = reason;
+        tags.appendChild(tag);
+      });
+
+      card.appendChild(title);
+      card.appendChild(meta);
+      card.appendChild(tags);
+
+      if (entry.task.detail) {
+        const detail = document.createElement("p");
+        detail.className = "bedtime-review-detail";
+        detail.textContent = entry.task.detail;
+        card.appendChild(detail);
+      }
+
+      list.appendChild(card);
+    });
+
+    section.appendChild(list);
+    refs.bedtimeReviewGroups.appendChild(section);
+  });
+
+  if (totalRiskCount <= 0) {
+    const weekEmpty = document.createElement("p");
+    weekEmpty.className = "bedtime-review-empty";
+    weekEmpty.textContent = "\u672C\u5468\u5165\u56F4\u4EFB\u52A1\u4E3A 0\uff0c\u5DF2\u5728\u5404\u65E5\u677F\u5757\u4E2D\u6807\u6CE8\u3002";
+    refs.bedtimeReviewGroups.appendChild(weekEmpty);
+  }
 }
 
 function setAllocationMode(mode) {

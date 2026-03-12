@@ -1054,6 +1054,37 @@ button.danger {
   gap: 10px;
 }
 
+.menu-nav-row {
+  margin: 0 8px 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(162, 152, 137, 0.22);
+  background: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #39414f;
+  box-shadow: none;
+  text-align: left;
+}
+
+.menu-nav-row:hover {
+  background: rgba(216, 221, 230, 0.45);
+  filter: none;
+}
+
+.menu-nav-row.is-active {
+  border-color: rgba(191, 108, 47, 0.45);
+  background: rgba(255, 236, 214, 0.82);
+}
+
+.menu-nav-arrow {
+  color: #6d4f37;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .menu-toggle-label {
   color: #39414f;
   font-size: 0.9rem;
@@ -1139,6 +1170,142 @@ button.danger {
 
 .menu-action-btn.is-danger:hover {
   background: rgba(255, 227, 227, 0.75);
+}
+
+.bedtime-review-page {
+  display: grid;
+  gap: 16px;
+}
+
+.bedtime-review-week-tools {
+  align-items: center;
+}
+
+.bedtime-review-week-tools #bedtime-review-back-btn {
+  margin-left: auto;
+}
+
+.bedtime-review-page .summary-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bedtime-review-header h1 {
+  margin-bottom: 4px;
+}
+
+.bedtime-review-groups {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.bedtime-review-group {
+  border: 1px solid rgba(167, 120, 75, 0.3);
+  border-radius: 12px;
+  background: linear-gradient(170deg, rgba(255, 249, 238, 0.88), rgba(246, 232, 206, 0.75));
+  overflow: hidden;
+}
+
+.bedtime-review-group-summary {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.94rem;
+  color: #5c3f29;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bedtime-review-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.bedtime-review-group-summary::after {
+  content: "▾";
+  color: #7b5a40;
+  font-size: 0.84rem;
+  transition: transform 0.18s ease;
+}
+
+.bedtime-review-group[open] .bedtime-review-group-summary::after {
+  transform: rotate(180deg);
+}
+
+.bedtime-review-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(167, 120, 75, 0.22);
+}
+
+.bedtime-review-day-empty {
+  margin: 0;
+  border: 1px dashed rgba(171, 128, 84, 0.42);
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  color: #7a5e48;
+  background: rgba(255, 249, 239, 0.72);
+}
+
+.bedtime-review-item {
+  border: 1px solid rgba(157, 115, 75, 0.28);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: rgba(255, 248, 233, 0.86);
+}
+
+.bedtime-review-item h4 {
+  margin: 0;
+  color: #4f311e;
+  font-size: 0.96rem;
+}
+
+.bedtime-review-meta {
+  margin: 6px 0 0;
+  color: #765945;
+  font-size: 0.82rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.bedtime-review-tags {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bedtime-review-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(191, 108, 47, 0.42);
+  background: rgba(255, 238, 220, 0.88);
+  color: #7a4c2a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.bedtime-review-detail {
+  margin: 8px 0 0;
+  color: #6f533f;
+  font-size: 0.86rem;
+  line-height: 1.42;
+}
+
+.bedtime-review-empty {
+  margin: 0;
+  border: 1px dashed rgba(161, 119, 76, 0.45);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 12px;
+  background: rgba(255, 247, 231, 0.65);
 }
 
 .login-page {
