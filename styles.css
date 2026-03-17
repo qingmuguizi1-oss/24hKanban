@@ -398,6 +398,92 @@ small {
   font-size: 0.8rem;
 }
 
+.task-form-side-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.task-subcategory-panel {
+  border: 1px solid rgba(167, 120, 75, 0.28);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(165deg, rgba(255, 248, 233, 0.84), rgba(245, 227, 199, 0.7));
+  min-height: 172px;
+}
+
+.task-subcategory-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.task-subcategory-title {
+  color: #5f402c;
+  font-size: 0.94rem;
+  font-weight: 700;
+}
+
+.task-subcategory-caption {
+  color: #8a6a54;
+  font-size: 0.8rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.task-subcategory-groups {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.task-subcategory-group {
+  border: 1px solid rgba(167, 120, 75, 0.22);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 251, 243, 0.72);
+  box-shadow: inset 3px 0 0 var(--task-subcategory-accent, #c46631);
+}
+
+.task-subcategory-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-subcategory-group-head strong {
+  color: #4c2f1c;
+  font-size: 0.9rem;
+}
+
+.task-subcategory-group-head span {
+  color: #8a6a54;
+  font-size: 0.78rem;
+}
+
+.task-subcategory-chip-wrap {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-subcategory-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 120, 75, 0.22);
+  background: rgba(255, 247, 232, 0.95);
+  color: #6d4b35;
+  font-size: 0.82rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
 .importance-level-group {
   margin-top: 8px;
   display: flex;
@@ -1186,7 +1272,7 @@ button.danger {
 }
 
 .bedtime-review-page .summary-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .bedtime-review-header h1 {
@@ -2071,6 +2157,10 @@ button.danger {
   .timeline {
     grid-template-columns: repeat(12, minmax(18px, 1fr));
     gap: 3px;
+  }
+
+  .task-subcategory-panel {
+    min-height: 0;
   }
 
   .head-tools {

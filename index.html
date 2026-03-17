@@ -213,14 +213,24 @@
             </details>
           </div>
 
-          <label>
-            任务状态
-            <select id="task-status" required>
-              <option value="todo">🕓 未开始</option>
-              <option value="doing">⏳ 进行中</option>
-              <option value="done">✅ 已完成</option>
-            </select>
-          </label>
+          <div class="task-form-side-panel">
+            <label>
+              任务状态
+              <select id="task-status" required>
+                <option value="todo">🕓 未开始</option>
+                <option value="doing">⏳ 进行中</option>
+                <option value="done">✅ 已完成</option>
+              </select>
+            </label>
+
+            <section id="task-subcategory-panel" class="task-subcategory-panel is-hidden" aria-live="polite">
+              <div class="task-subcategory-head">
+                <span class="task-subcategory-title">关联小类</span>
+                <span id="task-subcategory-caption" class="task-subcategory-caption">选择上方 5 大类后显示</span>
+              </div>
+              <div id="task-subcategory-groups" class="task-subcategory-groups"></div>
+            </section>
+          </div>
         </div>
 
         <p class="duration-preview">总用时：<strong id="duration-preview">--</strong></p>
@@ -309,7 +319,7 @@
   <section id="bedtime-review-page" class="app bedtime-review-page is-hidden" aria-hidden="true">
     <header class="app-header bedtime-review-header">
       <h1>睡前回顾</h1>
-      <p>按时间分类回顾：紧急且重要、以及过程较差/很差的任务。</p>
+      <p>按时间分类回顾：紧急且重要、重要不紧急（1级），以及过程较差/很差的任务。</p>
     </header>
 
     <section class="panel">

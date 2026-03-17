@@ -276,6 +276,9 @@ const refs = {
   addCategoryBtn: document.getElementById("add-category-btn"),
   closeCategoryManagerBtn: document.getElementById("close-category-manager-btn"),
   taskStatus: document.getElementById("task-status"),
+  taskSubcategoryPanel: document.getElementById("task-subcategory-panel"),
+  taskSubcategoryCaption: document.getElementById("task-subcategory-caption"),
+  taskSubcategoryGroups: document.getElementById("task-subcategory-groups"),
   durationPreview: document.getElementById("duration-preview"),
   resetForm: document.getElementById("reset-form"),
   bedtimeReviewPage: document.getElementById("bedtime-review-page"),
@@ -2283,6 +2286,7 @@ function setSelectedCategoriesToForm(categoryKeys) {
 
 function renderCategorySummary() {
   const selected = getSelectedCategoriesFromForm();
+  renderTaskSubcategoryPanel(selected);
   if (!refs.taskCategorySummary) {
     return;
   }
@@ -2295,6 +2299,58 @@ function renderCategorySummary() {
 
   refs.taskCategorySummary.textContent = selected.map((key) => getCategoryLabelByKey(key)).join(" / ");
   refs.taskCategorySummary.classList.remove("is-empty");
+}
+
+function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm()) {
+  if (!refs.taskSubcategoryPanel || !refs.taskSubcategoryGroups || !refs.taskSubcategoryCaption) {
+    return;
+  }
+
+  const groups = selectedKeys
+    .map((key) => TASK_CATEGORY_GROUPS.find((group) => group.key === key))
+    .filter(Boolean);
+
+  refs.taskSubcategoryPanel.classList.toggle("is-hidden", groups.length === 0);
+  refs.taskSubcategoryGroups.innerHTML = "";
+
+  if (!groups.length) {
+    refs.taskSubcategoryCaption.textContent = "选择上方 5 大类后显示";
+    return;
+  }
+
+  refs.taskSubcategoryCaption.textContent = `当前展示 ${groups.length} 个大类的小类`;
+
+  groups.forEach((group, index) => {
+    const section = document.createElement("section");
+    section.className = "task-subcategory-group";
+    section.style.setProperty("--task-subcategory-accent", getCategoryColorByKey(group.key, index));
+
+    const heading = document.createElement("div");
+    heading.className = "task-subcategory-group-head";
+
+    const title = document.createElement("strong");
+    title.textContent = `${group.icon} ${group.label}`;
+
+    const hint = document.createElement("span");
+    hint.textContent = `${group.subcategories.length} 个小类`;
+
+    heading.appendChild(title);
+    heading.appendChild(hint);
+
+    const chipWrap = document.createElement("div");
+    chipWrap.className = "task-subcategory-chip-wrap";
+
+    group.subcategories.forEach((item) => {
+      const chip = document.createElement("span");
+      chip.className = "task-subcategory-chip";
+      chip.textContent = item.label;
+      chipWrap.appendChild(chip);
+    });
+
+    section.appendChild(heading);
+    section.appendChild(chipWrap);
+    refs.taskSubcategoryGroups.appendChild(section);
+  });
 }
 
 function createUniqueCategoryKey(seed = "custom") {
@@ -3138,6 +3194,13 @@ function getBedtimeReviewReasons(task) {
   if (task && task.priority === "important_urgent") {
     reasons.push("\u7D27\u6025\u4E14\u91CD\u8981");
   }
+  if (
+    task
+    && task.priority === "important_not_urgent"
+    && sanitizeImportanceLevel(task.importanceLevel) === "level1"
+  ) {
+    reasons.push("\u91CD\u8981\u4E0D\u7D27\u6025(1\u7EA7)");
+  }
   const processKey = sanitizeProcessKey(task && task.process ? task.process : "");
   if (BEDTIME_REVIEW_BAD_PROCESS_KEYS.has(processKey)) {
     reasons.push(processKey === "very_unsmooth" ? "\u8FC7\u7A0B\u5F88\u5DEE" : "\u8FC7\u7A0B\u8F83\u5DEE");
@@ -3177,6 +3240,7 @@ function renderBedtimeReview() {
   const entriesByDay = Object.fromEntries(weekDays.map((day) => [day.key, []]));
 
   let urgentImportantCount = 0;
+  let importantNotUrgentLevel1Count = 0;
   let badProcessCount = 0;
   let totalRiskCount = 0;
 
@@ -3197,6 +3261,9 @@ function renderBedtimeReview() {
 
     if (reasons.includes("\u7D27\u6025\u4E14\u91CD\u8981")) {
       urgentImportantCount += 1;
+    }
+    if (reasons.includes("\u91CD\u8981\u4E0D\u7D27\u6025(1\u7EA7)")) {
+      importantNotUrgentLevel1Count += 1;
     }
     if (reasons.includes("\u8FC7\u7A0B\u8F83\u5DEE") || reasons.includes("\u8FC7\u7A0B\u5F88\u5DEE")) {
       badProcessCount += 1;
@@ -3226,6 +3293,7 @@ function renderBedtimeReview() {
   const summaryItems = [
     { label: "\u603B\u9700\u56DE\u987E", value: String(totalRiskCount) },
     { label: "\u7D27\u6025\u4E14\u91CD\u8981", value: String(urgentImportantCount) },
+    { label: "\u91CD\u8981\u4E0D\u7D27\u6025(1\u7EA7)", value: String(importantNotUrgentLevel1Count) },
     { label: "\u8FC7\u7A0B\u8F83\u5DEE/\u5F88\u5DEE", value: String(badProcessCount) }
   ];
   summaryItems.forEach((item) => {
