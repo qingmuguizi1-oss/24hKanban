@@ -1,10 +1,10 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>24h任务效率看板</title>
-  <link rel="stylesheet" href="styles.css?v=20260317-01">
+  <link rel="stylesheet" href="styles.css?v=20260317-02">
 </head>
 <body>
   <div class="global-menu" id="global-menu">
@@ -250,11 +250,7 @@
             <button type="button" id="mode-day" class="switch-btn is-active">天</button>
             <button type="button" id="mode-week" class="switch-btn">周</button>
           </div>
-          <label id="allocation-date-label">
-            查看日期
-            <input id="selected-date" type="date">
-            <span id="selected-week" class="selected-week is-hidden">第--周</span>
-          </label>
+          <label id="allocation-date-label"><input id="selected-date" type="date" aria-label="查看日期"><span id="selected-week" class="selected-week is-hidden">第--周</span></label>
         </div>
       </div>
 
@@ -279,10 +275,7 @@
     <section class="panel">
       <div class="panel-head">
         <h2>任务看板</h2>
-        <label>
-          查看日期
-          <input id="board-date" type="date">
-        </label>
+        <label><input id="board-date" type="date" aria-label="查看日期"></label>
       </div>
 
       <div class="board">
@@ -347,10 +340,7 @@
       <div class="panel-head">
         <h2>分类投入</h2>
         <div class="head-tools task-category-tools">
-          <label id="task-category-page-date-label">
-            查看日期
-            <input id="task-category-page-date" type="date">
-          </label>
+          <label id="task-category-page-date-label"><input id="task-category-page-date" type="date" aria-label="查看日期"></label>
           <button id="task-category-page-back-btn" type="button" class="secondary">返回看板</button>
         </div>
       </div>
@@ -414,6 +404,6 @@
   <audio id="random-task-completion-sound" preload="auto"></audio>
 
   <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
-  <script src="app.js?v=20260317-01"></script>
+  <script src="app.js?v=20260317-02"></script>
 </body>
 </html>

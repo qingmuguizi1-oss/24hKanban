@@ -1,6 +1,8 @@
-﻿const STORAGE_KEY = "time-efficiency-tasks-v1";
+const STORAGE_KEY = "time-efficiency-tasks-v1";
+const TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY = "time-efficiency-tasks-last-local-mutation-at-v1";
 const TASK_FORM_DRAFT_STORAGE_KEY = "time-efficiency-task-form-draft-v1";
 const CATEGORY_DEFINITIONS_STORAGE_KEY = "time-efficiency-category-definitions-v1";
+const TASK_CATEGORY_SUBCATEGORY_CONFIG_STORAGE_KEY = "time-efficiency-task-category-subcategory-config-v1";
 const CLOUD_IMPORT_MARKER_PREFIX = "time-efficiency-cloud-imported";
 const VOICE_EFFECTS_STORAGE_KEY = "time-efficiency-voice-effects-enabled";
 
@@ -117,6 +119,7 @@ const DEFAULT_CATEGORY_DEFINITIONS = [
 ];
 const DEFAULT_CATEGORY_LABEL = "\uD83E\uDDE9 \u672A\u547D\u540D";
 const DEFAULT_CATEGORY_COLOR = "#8c8c8c";
+const TASK_CATEGORY_DEFAULT_PLANNED_MINUTES = 4 * 60;
 const TASK_CATEGORY_GROUPS = [
   {
     key: "work",
@@ -222,6 +225,7 @@ const TASK_COMPLETION_CONFETTI_COLORS = ["#f94144", "#f3722c", "#f8961e", "#f9c7
 const state = {
   tasks: [],
   categoryDefinitions: [],
+  taskCategorySubcategoryConfig: createDefaultTaskCategorySubcategoryConfig(),
   selectedDate: toDateInputValue(new Date()),
   boardDate: toDateInputValue(new Date()),
   bedtimeReviewDate: toDateInputValue(new Date()),
@@ -236,6 +240,8 @@ const state = {
   pieDefaultCenterText: "\u6682\u65E0\u8BB0\u5F55",
   pieActiveIndex: -1,
   draggingCategoryKey: "",
+  taskCategoryEditingGroupKey: "",
+  taskSubcategorySelections: {},
   collapsedById: {},
   boardGroupCollapsed: Object.fromEntries(
     Object.keys(STATUS_COLUMNS).map((status) => [
@@ -386,6 +392,7 @@ init();
 
 function init() {
   state.categoryDefinitions = loadCategoryDefinitions();
+  state.taskCategorySubcategoryConfig = loadTaskCategorySubcategoryConfig();
   state.tasks = loadTasks();
   ensureCategoryDefinitionsForTasks(state.tasks);
   setVoiceEffectsEnabled(loadVoiceEffectsPreference(), { skipPersist: true });
@@ -410,6 +417,11 @@ function init() {
     console.warn("Missing #task-start or #task-end fields in form.");
   }
   renderCategoryChecklist();
+  if (refs.taskCategoryPicker) {
+    refs.taskCategoryPicker.addEventListener("toggle", () => {
+      renderCategorySummary();
+    });
+  }
   refs.selectedDate.addEventListener("input", () => {
     state.selectedDate = refs.selectedDate.value;
     renderAllocationOverview();
@@ -1086,28 +1098,35 @@ async function bootstrapCloudTaskSync() {
 
   try {
     const localTasks = getNormalizedTaskList(state.tasks);
-    const cloudTasks = await pullTasksFromCloud();
-    if (Array.isArray(cloudTasks)) {
+    const cloudSnapshot = await pullTasksFromCloud();
+    if (cloudSnapshot && Array.isArray(cloudSnapshot.tasks)) {
+      const cloudTasks = cloudSnapshot.tasks;
       const hasMarker = hasCloudImportMarker(uid);
+      const localMutationAt = getLocalTaskMutationAt();
+      const cloudUpdatedAt = getCloudSnapshotUpdatedAt(cloudSnapshot);
+      const shouldPreferLocalSnapshot = hasMarker && localMutationAt > 0 && localMutationAt > cloudUpdatedAt;
       const mergedTasks = mergeTasksForCloudBootstrap(cloudTasks, localTasks);
       const hasLocalOnlyTasks = hasTasksNotInCloud(cloudTasks, localTasks);
-      const shouldUploadMerged = hasLocalOnlyTasks || (!hasMarker && localTasks.length > 0);
+      const shouldUploadMerged = shouldPreferLocalSnapshot || hasLocalOnlyTasks || (!hasMarker && localTasks.length > 0);
 
       console.info("[cloud-sync] bootstrap task snapshot", {
         localCount: localTasks.length,
         cloudCount: cloudTasks.length,
         hasMarker,
+        localMutationAt,
+        cloudUpdatedAt,
+        shouldPreferLocalSnapshot,
         hasLocalOnlyTasks,
         shouldUploadMerged
       });
 
-      state.tasks = mergedTasks;
-      saveTasks({ skipCloudSync: true });
+      state.tasks = shouldPreferLocalSnapshot ? localTasks : mergedTasks;
+      saveTasks({ skipCloudSync: true, skipLocalMutationStamp: true });
       renderAll();
 
       if (shouldUploadMerged) {
         const uploaded = await syncTasksToCloud({ immediate: true });
-        if (uploaded && localTasks.length > 0) {
+        if (uploaded && state.tasks.length > 0) {
           setCloudImportMarker(uid);
         }
       }
@@ -1127,6 +1146,32 @@ function getNormalizedTaskList(tasks) {
   return (Array.isArray(tasks) ? tasks : [])
     .map(normalizeTask)
     .filter(Boolean);
+}
+
+function getLocalTaskMutationAt() {
+  try {
+    const raw = localStorage.getItem(TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY);
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setLocalTaskMutationAt(timestamp = Date.now()) {
+  try {
+    localStorage.setItem(TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY, String(Math.max(0, Number(timestamp) || Date.now())));
+  } catch {
+    // ignore mutation timestamp persistence failures
+  }
+}
+
+function getCloudSnapshotUpdatedAt(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return 0;
+  }
+  const numeric = Number(snapshot.updatedAt);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }
 
 function mergeTasksForCloudBootstrap(cloudTasks, localTasks) {
@@ -1231,7 +1276,8 @@ async function pullTasksFromCloud() {
     return null;
   }
 
-  const tasks = docs[0] && Array.isArray(docs[0].tasks) ? docs[0].tasks : null;
+  const firstDoc = docs[0] || null;
+  const tasks = firstDoc && Array.isArray(firstDoc.tasks) ? firstDoc.tasks : null;
   if (!tasks) {
     return null;
   }
@@ -1240,9 +1286,12 @@ async function pullTasksFromCloud() {
     renderCategoryChecklist();
   }
 
-  return tasks
-    .map(normalizeTask)
-    .filter(Boolean);
+  return {
+    tasks: tasks
+      .map(normalizeTask)
+      .filter(Boolean),
+    updatedAt: firstDoc && Number.isFinite(Number(firstDoc.updatedAt)) ? Number(firstDoc.updatedAt) : 0
+  };
 }
 
 function extractCloudDocsFromQueryResult(result) {
@@ -1956,6 +2005,7 @@ function restoreTaskFormDraft() {
     refs.taskEnd.value = normalizeDateTimeInput(draft.endAt || "");
   }
 
+  setSelectedTaskSubcategoriesToForm(draft.subcategories, draft.categories);
   setSelectedCategoriesToForm(Array.isArray(draft.categories) ? draft.categories : []);
   refs.taskStatus.value = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, draft.status) ? draft.status : "todo";
   updateDetailCount();
@@ -1992,6 +2042,7 @@ function persistTaskFormDraft() {
       startAt: refs.taskStart ? normalizeDateTimeInput(refs.taskStart.value) : "",
       endAt: refs.taskEnd ? normalizeDateTimeInput(refs.taskEnd.value) : "",
       categories: getSelectedCategoriesFromForm(),
+      subcategories: getSelectedTaskSubcategoriesFromForm(),
       status: refs.taskStatus.value
     };
 
@@ -2262,6 +2313,10 @@ function renderCategoryChecklist() {
 }
 
 function handleCategoryInputChanged() {
+  state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(
+    state.taskSubcategorySelections,
+    getSelectedCategoriesFromForm()
+  );
   renderCategorySummary();
   persistTaskFormDraft();
 }
@@ -2281,7 +2336,22 @@ function setSelectedCategoriesToForm(categoryKeys) {
   getCategoryInputs().forEach((input) => {
     input.checked = selected.has(input.value);
   });
+  state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(
+    state.taskSubcategorySelections,
+    Array.from(selected)
+  );
   renderCategorySummary();
+}
+
+function getSelectedTaskSubcategoriesFromForm() {
+  return sanitizeTaskSubcategorySelections(
+    state.taskSubcategorySelections,
+    getSelectedCategoriesFromForm()
+  );
+}
+
+function setSelectedTaskSubcategoriesToForm(subcategorySelections, categoryKeys = getSelectedCategoriesFromForm()) {
+  state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(subcategorySelections, categoryKeys);
 }
 
 function renderCategorySummary() {
@@ -2306,15 +2376,22 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
     return;
   }
 
+  const isCategoryPickerOpen = !refs.taskCategoryPicker || refs.taskCategoryPicker.open;
+  const groupMap = new Map(getTaskCategoryGroups().map((group) => [group.key, group]));
   const groups = selectedKeys
-    .map((key) => TASK_CATEGORY_GROUPS.find((group) => group.key === key))
+    .map((key) => groupMap.get(key))
     .filter(Boolean);
 
-  refs.taskSubcategoryPanel.classList.toggle("is-hidden", groups.length === 0);
+  refs.taskSubcategoryPanel.classList.toggle("is-hidden", groups.length === 0 || !isCategoryPickerOpen);
   refs.taskSubcategoryGroups.innerHTML = "";
 
   if (!groups.length) {
     refs.taskSubcategoryCaption.textContent = "选择上方 5 大类后显示";
+    return;
+  }
+
+  if (!isCategoryPickerOpen) {
+    refs.taskSubcategoryCaption.textContent = "展开“任务类别”后显示";
     return;
   }
 
@@ -2339,11 +2416,19 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
 
     const chipWrap = document.createElement("div");
     chipWrap.className = "task-subcategory-chip-wrap";
+    const selectedSubcategories = getSelectedTaskSubcategoriesForGroup(group.key);
 
     group.subcategories.forEach((item) => {
-      const chip = document.createElement("span");
+      const chip = document.createElement("button");
+      const selected = selectedSubcategories.includes(item.key);
+      chip.type = "button";
       chip.className = "task-subcategory-chip";
+      chip.classList.toggle("is-active", selected);
+      chip.setAttribute("aria-pressed", selected ? "true" : "false");
       chip.textContent = item.label;
+      chip.addEventListener("click", () => {
+        toggleTaskSubcategorySelection(group.key, item.key);
+      });
       chipWrap.appendChild(chip);
     });
 
@@ -2351,6 +2436,182 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
     section.appendChild(chipWrap);
     refs.taskSubcategoryGroups.appendChild(section);
   });
+}
+
+function createDefaultTaskCategorySubcategoryConfig() {
+  return Object.fromEntries(
+    TASK_CATEGORY_GROUPS.map((group) => [
+      group.key,
+      group.subcategories.map((item) => ({
+        key: item.key,
+        label: item.label,
+        keywords: Array.isArray(item.keywords) ? [...item.keywords] : []
+      }))
+    ])
+  );
+}
+
+function getBaseTaskCategoryGroupByKey(groupKey) {
+  return TASK_CATEGORY_GROUPS.find((group) => group.key === groupKey) || null;
+}
+
+function normalizeTaskCategorySubcategoryConfig(groupKey, subcategories, fallbackSubcategories = []) {
+  const fallback = Array.isArray(fallbackSubcategories) && fallbackSubcategories.length
+    ? fallbackSubcategories
+    : [{ key: `${groupKey}_other`, label: "\u5176\u4ED6", keywords: [] }];
+  const source = Array.isArray(subcategories) && subcategories.length ? subcategories : fallback;
+  const usedKeys = new Set();
+  const normalized = [];
+
+  source.forEach((item, index) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+
+    const label = normalizeCategoryLabel(item.label, `\u5C0F\u7C7B${index + 1}`);
+    const seed = item.key || `${groupKey}_${label}`;
+    let key = normalizeCategoryKey(seed) || `${groupKey}_item_${index + 1}`;
+    let duplicateIndex = 1;
+    while (usedKeys.has(key)) {
+      key = `${normalizeCategoryKey(seed) || `${groupKey}_item`}_${duplicateIndex}`;
+      duplicateIndex += 1;
+    }
+    usedKeys.add(key);
+
+    const keywords = Array.isArray(item.keywords)
+      ? item.keywords
+        .map((keyword) => String(keyword || "").trim())
+        .filter((keyword, keywordIndex, list) => keyword && list.indexOf(keyword) === keywordIndex)
+        .slice(0, 8)
+      : [];
+
+    normalized.push({
+      key,
+      label,
+      keywords
+    });
+  });
+
+  if (normalized.length) {
+    return normalized;
+  }
+  return fallback.map((item) => ({
+    key: normalizeCategoryKey(item.key) || createUniqueTaskCategorySubcategoryKey(groupKey, item.label, normalized),
+    label: normalizeCategoryLabel(item.label, "\u5176\u4ED6"),
+    keywords: Array.isArray(item.keywords) ? [...item.keywords] : []
+  }));
+}
+
+function loadTaskCategorySubcategoryConfig() {
+  const fallback = createDefaultTaskCategorySubcategoryConfig();
+  try {
+    const raw = localStorage.getItem(TASK_CATEGORY_SUBCATEGORY_CONFIG_STORAGE_KEY);
+    if (!raw) {
+      return fallback;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return fallback;
+    }
+
+    const normalized = {};
+    TASK_CATEGORY_GROUPS.forEach((group) => {
+      normalized[group.key] = normalizeTaskCategorySubcategoryConfig(
+        group.key,
+        parsed[group.key],
+        fallback[group.key]
+      );
+    });
+    return normalized;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveTaskCategorySubcategoryConfig() {
+  try {
+    localStorage.setItem(
+      TASK_CATEGORY_SUBCATEGORY_CONFIG_STORAGE_KEY,
+      JSON.stringify(state.taskCategorySubcategoryConfig)
+    );
+  } catch {
+    // ignore task category config persistence failures
+  }
+}
+
+function getTaskCategorySubcategoriesConfigByGroupKey(groupKey) {
+  const baseGroup = getBaseTaskCategoryGroupByKey(groupKey);
+  if (!baseGroup) {
+    return [];
+  }
+
+  const fallback = createDefaultTaskCategorySubcategoryConfig()[groupKey] || [];
+  const current = state.taskCategorySubcategoryConfig && state.taskCategorySubcategoryConfig[groupKey];
+  return normalizeTaskCategorySubcategoryConfig(groupKey, current, fallback);
+}
+
+function getTaskCategoryGroups() {
+  return TASK_CATEGORY_GROUPS.map((group) => ({
+    ...group,
+    subcategories: getTaskCategorySubcategoriesConfigByGroupKey(group.key)
+  }));
+}
+
+function getTaskCategoryGroupByKey(groupKey) {
+  return getTaskCategoryGroups().find((group) => group.key === groupKey) || null;
+}
+
+function sanitizeTaskSubcategorySelections(subcategorySelections, categoryKeys = getSelectedCategoriesFromForm()) {
+  const allowedCategoryKeys = new Set(sanitizeCategoryKeys(categoryKeys));
+  const source = subcategorySelections && typeof subcategorySelections === "object" ? subcategorySelections : {};
+  const normalized = {};
+
+  allowedCategoryKeys.forEach((groupKey) => {
+    const group = getTaskCategoryGroupByKey(groupKey);
+    if (!group) {
+      return;
+    }
+
+    const allowedSubcategories = new Set(group.subcategories.map((item) => item.key));
+    const rawItems = Array.isArray(source[groupKey]) ? source[groupKey] : [];
+    const selected = rawItems
+      .map((item) => String(item || "").trim())
+      .filter((item, index, list) => item && allowedSubcategories.has(item) && list.indexOf(item) === index);
+
+    if (selected.length) {
+      normalized[groupKey] = selected;
+    }
+  });
+
+  return normalized;
+}
+
+function getSelectedTaskSubcategoriesForGroup(groupKey) {
+  const selections = getSelectedTaskSubcategoriesFromForm();
+  return Array.isArray(selections[groupKey]) ? selections[groupKey] : [];
+}
+
+function toggleTaskSubcategorySelection(groupKey, subcategoryKey) {
+  const nextSelections = { ...getSelectedTaskSubcategoriesFromForm() };
+  const current = Array.isArray(nextSelections[groupKey]) ? [...nextSelections[groupKey]] : [];
+  const existingIndex = current.indexOf(subcategoryKey);
+
+  if (existingIndex >= 0) {
+    current.splice(existingIndex, 1);
+  } else {
+    current.push(subcategoryKey);
+  }
+
+  if (current.length) {
+    nextSelections[groupKey] = current;
+  } else {
+    delete nextSelections[groupKey];
+  }
+
+  setSelectedTaskSubcategoriesToForm(nextSelections);
+  renderTaskSubcategoryPanel();
+  persistTaskFormDraft();
 }
 
 function createUniqueCategoryKey(seed = "custom") {
@@ -2732,6 +2993,7 @@ function normalizeTask(input) {
     startAt,
     endAt,
     categories: categories.length ? categories : [getDefaultCategoryKey()],
+    subcategories: sanitizeTaskSubcategorySelections(input.subcategories, categories),
     status: Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, input.status) ? input.status : "todo"
   };
 }
@@ -2939,6 +3201,82 @@ function formatPriorityLabel(task) {
   return base;
 }
 
+function getPriorityPillClassName(priority) {
+  if (!Object.prototype.hasOwnProperty.call(PRIORITY_MAP, priority)) {
+    return "";
+  }
+  return `priority-pill--${priority}`;
+}
+
+function getPriorityVisualStyle(task) {
+  if (task && task.priority === "important_not_urgent") {
+    const level = sanitizeImportanceLevel(task.importanceLevel);
+    const levelStyleMap = {
+      level1: {
+        pillBackground: "rgba(255, 138, 0, 0.9)",
+        pillBorder: "rgba(201, 112, 16, 0.52)",
+        pillText: "#fffaf2",
+        accentColor: "rgba(255, 138, 0, 0.9)"
+      },
+      level2: {
+        pillBackground: "rgba(255, 138, 0, 0.7)",
+        pillBorder: "rgba(201, 112, 16, 0.44)",
+        pillText: "#fffaf2",
+        accentColor: "rgba(255, 138, 0, 0.7)"
+      },
+      level3: {
+        pillBackground: "rgba(255, 138, 0, 0.5)",
+        pillBorder: "rgba(201, 112, 16, 0.34)",
+        pillText: "#7a4300",
+        accentColor: "rgba(255, 138, 0, 0.5)"
+      },
+      level4: {
+        pillBackground: "rgba(255, 138, 0, 0.3)",
+        pillBorder: "rgba(201, 112, 16, 0.24)",
+        pillText: "#7a4300",
+        accentColor: "rgba(255, 138, 0, 0.3)"
+      }
+    };
+    return levelStyleMap[level] || levelStyleMap.level2;
+  }
+
+  switch (task && task.priority) {
+    case "important_urgent":
+      return { accentColor: "#f2382e" };
+    case "important_not_urgent":
+      return { accentColor: "#ff8a00" };
+    case "not_important_urgent":
+      return { accentColor: "#ffbf00" };
+    case "not_important_not_urgent":
+      return { accentColor: "#9fd500" };
+    default:
+      return { accentColor: "#c06331" };
+  }
+}
+
+function applyPriorityVisualStyle(task, priorityPill, card) {
+  if (!priorityPill || !card) {
+    return;
+  }
+
+  const visualStyle = getPriorityVisualStyle(task);
+  priorityPill.style.removeProperty("background");
+  priorityPill.style.removeProperty("border-color");
+  priorityPill.style.removeProperty("color");
+
+  if (visualStyle.pillBackground) {
+    priorityPill.style.background = visualStyle.pillBackground;
+  }
+  if (visualStyle.pillBorder) {
+    priorityPill.style.borderColor = visualStyle.pillBorder;
+  }
+  if (visualStyle.pillText) {
+    priorityPill.style.color = visualStyle.pillText;
+  }
+
+  card.style.setProperty("--task-card-accent", visualStyle.accentColor || "#c06331");
+}
+
 function formatMoodLabel(task) {
   const moodKey = sanitizeMoodKey(task.mood);
   if (!moodKey) {
@@ -2985,6 +3323,9 @@ function getCategoryLabels(task) {
 
 function saveTasks(options = {}) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+  if (!options.skipLocalMutationStamp) {
+    setLocalTaskMutationAt();
+  }
   if (options.skipCloudSync) {
     return;
   }
@@ -3071,6 +3412,7 @@ function onSubmitTask(event) {
     startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
     endAt: normalizeDateTimeInput(refs.taskEnd ? refs.taskEnd.value : ""),
     categories,
+    subcategories: getSelectedTaskSubcategoriesFromForm(),
     status: refs.taskStatus.value
   };
 
@@ -3140,6 +3482,7 @@ function resetForm() {
   setSelectedProcessToForm(DEFAULT_PROCESS);
   setSelectedProcessScoreToForm("");
   setOptionalTagMode(DEFAULT_OPTIONAL_TAG_MODE);
+  setSelectedTaskSubcategoriesToForm({});
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
   if (refs.taskCategoryPicker) {
@@ -3401,7 +3744,7 @@ function renderTaskCategoryPage() {
 function computeTaskCategoryStats(day) {
   const dayStart = new Date(`${day}T00:00`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-  const groups = TASK_CATEGORY_GROUPS.map((group) => ({
+  const groups = getTaskCategoryGroups().map((group) => ({
     ...group,
     totalMinutes: 0,
     subcategoryTotals: Object.fromEntries(group.subcategories.map((item) => [item.key, 0]))
@@ -3432,7 +3775,10 @@ function computeTaskCategoryStats(day) {
       const share = overlap / taskCategories.length;
       group.totalMinutes += share;
 
-      const matchedSubcategories = matchTaskSubcategories(group, taskText);
+      const selectedSubcategories = getTaskSubcategoriesForGroup(task, group.key);
+      const matchedSubcategories = selectedSubcategories.length
+        ? selectedSubcategories
+        : matchTaskSubcategories(group, taskText);
       const fallbackKey = getTaskCategoryFallbackKey(group);
       const targets = matchedSubcategories.length ? matchedSubcategories : [fallbackKey];
       const subShare = share / targets.length;
@@ -3480,7 +3826,7 @@ function renderTaskCategorySummary(stats) {
 
   const items = [
     { label: "\u5DF2\u8BB0\u5F55\u65F6\u957F", value: formatDuration(stats.usedMinutes) },
-    { label: "\u5DF2\u6FC0\u6D3B\u5927\u7C7B", value: `${stats.activeGroupCount}/${TASK_CATEGORY_GROUPS.length}` },
+    { label: "\u5DF2\u6FC0\u6D3B\u5927\u7C7B", value: `${stats.activeGroupCount}/${getTaskCategoryGroups().length}` },
     { label: "\u4ECA\u65E5\u4E3B\u7EBF", value: `${topLabel} ${topDuration}` }
   ];
 
@@ -3501,9 +3847,17 @@ function renderTaskCategoryCards(groups) {
   refs.taskCategoryCards.innerHTML = "";
 
   groups.forEach((group, index) => {
+    const isEditing = state.taskCategoryEditingGroupKey === group.key;
     const card = document.createElement("article");
     card.className = "task-category-card";
+    card.classList.toggle("is-editing", isEditing);
     card.style.setProperty("--task-category-accent", getCategoryColorByKey(group.key, index));
+    if (!isEditing) {
+      card.title = "\u53CC\u51FB\u8FDB\u5165\u5C0F\u7C7B\u7F16\u8F91";
+      card.addEventListener("dblclick", () => {
+        enterTaskCategoryEditMode(group.key);
+      });
+    }
 
     const head = document.createElement("div");
     head.className = "task-category-card-head";
@@ -3521,19 +3875,45 @@ function renderTaskCategoryCards(groups) {
     titleWrap.appendChild(title);
     titleWrap.appendChild(description);
 
+    const toolbar = document.createElement("div");
+    toolbar.className = "task-category-card-toolbar";
+
+    if (isEditing) {
+      const editingTag = document.createElement("span");
+      editingTag.className = "task-category-edit-tag";
+      editingTag.textContent = "\u7F16\u8F91\u4E2D";
+
+      const finishBtn = document.createElement("button");
+      finishBtn.type = "button";
+      finishBtn.className = "secondary task-category-editor-btn";
+      finishBtn.textContent = "\u5B8C\u6210";
+      finishBtn.addEventListener("click", () => {
+        exitTaskCategoryEditMode();
+      });
+
+      toolbar.appendChild(editingTag);
+      toolbar.appendChild(finishBtn);
+    } else {
+      const hint = document.createElement("span");
+      hint.className = "task-category-card-hint";
+      hint.textContent = "\u53CC\u51FB\u7F16\u8F91\u5C0F\u7C7B";
+      toolbar.appendChild(hint);
+    }
+
     const metric = document.createElement("div");
     metric.className = "task-category-card-metric";
 
     const duration = document.createElement("strong");
     duration.textContent = formatDuration(group.totalMinutes);
 
-    const progress = document.createElement("span");
-    progress.textContent = `\u5DF2\u8FDB\u884C ${formatDuration(group.totalMinutes)}`;
+    const planned = document.createElement("span");
+    planned.textContent = `\u8BA1\u5212\u8FDB\u884C ${formatDuration(TASK_CATEGORY_DEFAULT_PLANNED_MINUTES)}`;
 
     metric.appendChild(duration);
-    metric.appendChild(progress);
+    metric.appendChild(planned);
 
     head.appendChild(titleWrap);
+    head.appendChild(toolbar);
     head.appendChild(metric);
 
     const meta = document.createElement("div");
@@ -3543,12 +3923,7 @@ function renderTaskCategoryCards(groups) {
     share.className = "task-category-meta-pill";
     share.textContent = `\u5360\u5DF2\u8BB0\u5F55 ${group.percent.toFixed(1)}%`;
 
-    const sync = document.createElement("span");
-    sync.className = "task-category-meta-pill";
-    sync.textContent = `\u540C\u6B65 ${getCategoryLabelByKey(group.key)}`;
-
     meta.appendChild(share);
-    meta.appendChild(sync);
 
     const subTitle = document.createElement("p");
     subTitle.className = "task-category-subtitle";
@@ -3557,23 +3932,27 @@ function renderTaskCategoryCards(groups) {
     const subList = document.createElement("div");
     subList.className = "task-category-subgrid";
 
-    group.subcategories.forEach((item) => {
-      const chip = document.createElement("div");
-      chip.className = "task-category-subitem";
-      if (item.minutes > 0) {
-        chip.classList.add("is-active");
-      }
+    if (isEditing) {
+      subList.appendChild(createTaskCategoryEditor(group));
+    } else {
+      group.subcategories.forEach((item) => {
+        const chip = document.createElement("div");
+        chip.className = "task-category-subitem";
+        if (item.minutes > 0) {
+          chip.classList.add("is-active");
+        }
 
-      const label = document.createElement("span");
-      label.textContent = item.label;
+        const label = document.createElement("span");
+        label.textContent = item.label;
 
-      const minutes = document.createElement("strong");
-      minutes.textContent = item.minutes > 0 ? formatDuration(item.minutes) : "--";
+        const minutes = document.createElement("strong");
+        minutes.textContent = item.minutes > 0 ? formatDuration(item.minutes) : "--";
 
-      chip.appendChild(label);
-      chip.appendChild(minutes);
-      subList.appendChild(chip);
-    });
+        chip.appendChild(label);
+        chip.appendChild(minutes);
+        subList.appendChild(chip);
+      });
+    }
 
     card.appendChild(head);
     card.appendChild(meta);
@@ -3581,6 +3960,220 @@ function renderTaskCategoryCards(groups) {
     card.appendChild(subList);
     refs.taskCategoryCards.appendChild(card);
   });
+}
+
+function createTaskCategoryEditor(group) {
+  const wrap = document.createElement("div");
+  wrap.className = "task-category-editor";
+
+  const actions = document.createElement("div");
+  actions.className = "task-category-editor-actions";
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "secondary task-category-editor-btn";
+  addBtn.textContent = "\u65B0\u589E\u5C0F\u7C7B";
+  addBtn.addEventListener("click", () => {
+    addTaskCategorySubcategory(group.key);
+  });
+
+  actions.appendChild(addBtn);
+  wrap.appendChild(actions);
+
+  const list = document.createElement("div");
+  list.className = "task-category-editor-list";
+
+  group.subcategories.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "task-category-editor-row";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "task-category-editor-input";
+    input.maxLength = 24;
+    input.value = item.label;
+    input.setAttribute("aria-label", `${group.label}\u5C0F\u7C7B\u540D\u79F0`);
+    input.addEventListener("change", () => {
+      renameTaskCategorySubcategory(group.key, item.key, input.value);
+    });
+    input.addEventListener("blur", () => {
+      if (input.value !== item.label) {
+        renameTaskCategorySubcategory(group.key, item.key, input.value);
+      }
+    });
+
+    const rowActions = document.createElement("div");
+    rowActions.className = "task-category-editor-row-actions";
+
+    const upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.className = "secondary task-category-editor-icon-btn";
+    upBtn.textContent = "\u2191";
+    upBtn.disabled = index === 0;
+    upBtn.addEventListener("click", () => {
+      moveTaskCategorySubcategory(group.key, item.key, -1);
+    });
+
+    const downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.className = "secondary task-category-editor-icon-btn";
+    downBtn.textContent = "\u2193";
+    downBtn.disabled = index === group.subcategories.length - 1;
+    downBtn.addEventListener("click", () => {
+      moveTaskCategorySubcategory(group.key, item.key, 1);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "secondary task-category-editor-icon-btn";
+    deleteBtn.textContent = "\u5220\u9664";
+    deleteBtn.addEventListener("click", () => {
+      deleteTaskCategorySubcategory(group.key, item.key);
+    });
+
+    rowActions.appendChild(upBtn);
+    rowActions.appendChild(downBtn);
+    rowActions.appendChild(deleteBtn);
+
+    row.appendChild(input);
+    row.appendChild(rowActions);
+    list.appendChild(row);
+  });
+
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function enterTaskCategoryEditMode(groupKey) {
+  if (!getTaskCategoryGroupByKey(groupKey)) {
+    return;
+  }
+  state.taskCategoryEditingGroupKey = groupKey;
+  renderTaskCategoryPage();
+}
+
+function exitTaskCategoryEditMode() {
+  if (!state.taskCategoryEditingGroupKey) {
+    return;
+  }
+  state.taskCategoryEditingGroupKey = "";
+  renderTaskCategoryPage();
+}
+
+function createUniqueTaskCategorySubcategoryKey(groupKey, seed, subcategories = getTaskCategorySubcategoriesConfigByGroupKey(groupKey)) {
+  const existing = new Set((Array.isArray(subcategories) ? subcategories : []).map((item) => item && item.key).filter(Boolean));
+  const base = normalizeCategoryKey(`${groupKey}_${seed}`) || `${groupKey}_custom`;
+  let candidate = base;
+  let index = 1;
+  while (existing.has(candidate)) {
+    candidate = `${base}_${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function syncTaskSubcategoryConfigChanges() {
+  let tasksChanged = false;
+
+  state.tasks = state.tasks.map((task) => {
+    const nextSubcategories = sanitizeTaskSubcategorySelections(task.subcategories, getTaskCategories(task));
+    const prevSerialized = JSON.stringify(task.subcategories || {});
+    const nextSerialized = JSON.stringify(nextSubcategories);
+    if (prevSerialized !== nextSerialized) {
+      tasksChanged = true;
+      return {
+        ...task,
+        subcategories: nextSubcategories
+      };
+    }
+    return task;
+  });
+
+  state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(
+    state.taskSubcategorySelections,
+    getSelectedCategoriesFromForm()
+  );
+
+  if (tasksChanged) {
+    saveTasks();
+  }
+  persistTaskFormDraft();
+}
+
+function updateTaskCategorySubcategoryConfig(groupKey, nextSubcategories) {
+  const baseGroup = getBaseTaskCategoryGroupByKey(groupKey);
+  if (!baseGroup) {
+    return;
+  }
+
+  state.taskCategorySubcategoryConfig = {
+    ...state.taskCategorySubcategoryConfig,
+    [groupKey]: normalizeTaskCategorySubcategoryConfig(
+      groupKey,
+      nextSubcategories,
+      baseGroup.subcategories
+    )
+  };
+
+  saveTaskCategorySubcategoryConfig();
+  syncTaskSubcategoryConfigChanges();
+  renderCategorySummary();
+  renderAll();
+}
+
+function addTaskCategorySubcategory(groupKey) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    keywords: Array.isArray(item.keywords) ? [...item.keywords] : []
+  }));
+  const label = `\u65B0\u5C0F\u7C7B${current.length + 1}`;
+  current.push({
+    key: createUniqueTaskCategorySubcategoryKey(groupKey, label, current),
+    label,
+    keywords: []
+  });
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, current);
+}
+
+function renameTaskCategorySubcategory(groupKey, subcategoryKey, nextLabel) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({ ...item }));
+  const normalizedLabel = normalizeCategoryLabel(nextLabel, "");
+  const target = current.find((item) => item.key === subcategoryKey);
+  if (!target || !normalizedLabel || target.label === normalizedLabel) {
+    renderTaskCategoryPage();
+    return;
+  }
+
+  target.label = normalizedLabel;
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, current);
+}
+
+function moveTaskCategorySubcategory(groupKey, subcategoryKey, offset) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({ ...item }));
+  const currentIndex = current.findIndex((item) => item.key === subcategoryKey);
+  const targetIndex = currentIndex + Number(offset || 0);
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= current.length) {
+    return;
+  }
+
+  const [moved] = current.splice(currentIndex, 1);
+  current.splice(targetIndex, 0, moved);
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, current);
+}
+
+function deleteTaskCategorySubcategory(groupKey, subcategoryKey) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({ ...item }));
+  if (current.length <= 1) {
+    alert("\u81F3\u5C11\u9700\u4FDD\u7559 1 \u4E2A\u5C0F\u7C7B\u3002");
+    return;
+  }
+
+  const next = current.filter((item) => item.key !== subcategoryKey);
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, next);
 }
 
 function matchTaskSubcategories(group, text) {
@@ -3592,6 +4185,21 @@ function matchTaskSubcategories(group, text) {
   return group.subcategories
     .filter((item) => Array.isArray(item.keywords) && item.keywords.some((keyword) => normalizedText.includes(normalizeKeywordText(keyword))))
     .map((item) => item.key);
+}
+
+function getTaskSubcategoriesForGroup(task, groupKey) {
+  if (!task || !task.subcategories || typeof task.subcategories !== "object") {
+    return [];
+  }
+
+  const group = getTaskCategoryGroupByKey(groupKey);
+  if (!group) {
+    return [];
+  }
+
+  const allowedKeys = new Set(group.subcategories.map((item) => item.key));
+  const rawItems = Array.isArray(task.subcategories[groupKey]) ? task.subcategories[groupKey] : [];
+  return rawItems.filter((item, index) => allowedKeys.has(item) && rawItems.indexOf(item) === index);
 }
 
 function getTaskCategoryFallbackKey(group) {
@@ -3857,10 +4465,22 @@ function createTaskCard(task) {
   const fragment = refs.template.content.cloneNode(true);
   const card = fragment.querySelector(".task-card");
   const toggleButton = fragment.querySelector(".card-toggle");
+  const priorityPill = fragment.querySelector(".priority-pill");
 
   fragment.querySelector(".card-title").textContent = task.name;
   fragment.querySelector(".card-time-range").textContent = `(${formatCardTimeRange(task.startAt, task.endAt)})`;
-  fragment.querySelector(".priority-pill").textContent = formatPriorityLabel(task);
+  priorityPill.textContent = formatPriorityLabel(task);
+  priorityPill.classList.remove(
+    "priority-pill--important_urgent",
+    "priority-pill--important_not_urgent",
+    "priority-pill--not_important_urgent",
+    "priority-pill--not_important_not_urgent"
+  );
+  const priorityPillClassName = getPriorityPillClassName(task.priority);
+  if (priorityPillClassName) {
+    priorityPill.classList.add(priorityPillClassName);
+  }
+  applyPriorityVisualStyle(task, priorityPill, card);
   const moodPill = fragment.querySelector(".mood-pill");
   const moodLabel = formatMoodLabel(task);
   moodPill.textContent = moodLabel;
@@ -3933,6 +4553,7 @@ function fillForm(task) {
     refs.taskStart.value = task.startAt;
     refs.taskEnd.value = task.endAt;
   }
+  setSelectedTaskSubcategoriesToForm(task.subcategories, getTaskCategories(task));
   setSelectedCategoriesToForm(getTaskCategories(task));
   refs.taskStatus.value = task.status;
   updateDetailCount();
