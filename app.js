@@ -3780,7 +3780,12 @@ function computeTaskCategoryStats(day) {
         ? selectedSubcategories
         : matchTaskSubcategories(group, taskText);
       const fallbackKey = getTaskCategoryFallbackKey(group);
-      const targets = matchedSubcategories.length ? matchedSubcategories : [fallbackKey];
+      const targets = matchedSubcategories.length
+        ? matchedSubcategories
+        : (fallbackKey ? [fallbackKey] : []);
+      if (!targets.length) {
+        return;
+      }
       const subShare = share / targets.length;
 
       targets.forEach((subcategoryKey) => {
@@ -3852,12 +3857,16 @@ function renderTaskCategoryCards(groups) {
     card.className = "task-category-card";
     card.classList.toggle("is-editing", isEditing);
     card.style.setProperty("--task-category-accent", getCategoryColorByKey(group.key, index));
-    if (!isEditing) {
-      card.title = "\u53CC\u51FB\u8FDB\u5165\u5C0F\u7C7B\u7F16\u8F91";
-      card.addEventListener("dblclick", () => {
-        enterTaskCategoryEditMode(group.key);
-      });
-    }
+    card.addEventListener("dblclick", (event) => {
+      if (event.target && event.target.closest && event.target.closest(".task-category-editor")) {
+        return;
+      }
+      if (state.taskCategoryEditingGroupKey === group.key) {
+        exitTaskCategoryEditMode();
+        return;
+      }
+      enterTaskCategoryEditMode(group.key);
+    });
 
     const head = document.createElement("div");
     head.className = "task-category-card-head";
@@ -3875,10 +3884,10 @@ function renderTaskCategoryCards(groups) {
     titleWrap.appendChild(title);
     titleWrap.appendChild(description);
 
-    const toolbar = document.createElement("div");
-    toolbar.className = "task-category-card-toolbar";
-
     if (isEditing) {
+      const toolbar = document.createElement("div");
+      toolbar.className = "task-category-card-toolbar";
+
       const editingTag = document.createElement("span");
       editingTag.className = "task-category-edit-tag";
       editingTag.textContent = "\u7F16\u8F91\u4E2D";
@@ -3893,11 +3902,11 @@ function renderTaskCategoryCards(groups) {
 
       toolbar.appendChild(editingTag);
       toolbar.appendChild(finishBtn);
+
+      head.appendChild(titleWrap);
+      head.appendChild(toolbar);
     } else {
-      const hint = document.createElement("span");
-      hint.className = "task-category-card-hint";
-      hint.textContent = "\u53CC\u51FB\u7F16\u8F91\u5C0F\u7C7B";
-      toolbar.appendChild(hint);
+      head.appendChild(titleWrap);
     }
 
     const metric = document.createElement("div");
@@ -3912,8 +3921,6 @@ function renderTaskCategoryCards(groups) {
     metric.appendChild(duration);
     metric.appendChild(planned);
 
-    head.appendChild(titleWrap);
-    head.appendChild(toolbar);
     head.appendChild(metric);
 
     const meta = document.createElement("div");
@@ -4203,8 +4210,14 @@ function getTaskSubcategoriesForGroup(task, groupKey) {
 }
 
 function getTaskCategoryFallbackKey(group) {
-  const fallback = group.subcategories.find((item) => !Array.isArray(item.keywords) || !item.keywords.length);
-  return fallback ? fallback.key : group.subcategories[0].key;
+  if (!group || !Array.isArray(group.subcategories)) {
+    return "";
+  }
+  const fallback = group.subcategories.find((item) => {
+    const key = String(item && item.key ? item.key : "");
+    return key === "other" || key.endsWith("_other");
+  });
+  return fallback ? fallback.key : "";
 }
 
 function normalizeKeywordText(value) {
