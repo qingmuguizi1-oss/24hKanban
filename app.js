@@ -8,11 +8,43 @@ const CLOUDBASE_ENV_ID = "jieyou-3gr01mvob9ad92de";
 const CLOUDBASE_TASKS_COLLECTION = "time_efficiency_user_tasks";
 const CLOUDBASE_SYNC_DEBOUNCE_MS = 800;
 const CODE_RESEND_SECONDS = 60;
+const PASSWORD_MIN_LENGTH = 6;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CLOUDBASE_SDK_URLS = [
   "https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js",
   "https://imgcache.qq.com/qcloud/tcbjs/1.6.7/tcb.js"
 ];
+const AUTH_MODE = {
+  CODE: "code",
+  PASSWORD: "password",
+  SETUP: "setup"
+};
+const AUTH_MODE_COPY = {
+  [AUTH_MODE.CODE]: {
+    title: "\u9a8c\u8bc1\u7801\u767b\u5f55",
+    description: "\u65e0\u9700\u8bb0\u5fc6\u5bc6\u7801\uff0c\u4f7f\u7528\u90ae\u7bb1\u9a8c\u8bc1\u7801\u5feb\u6377\u767b\u5f55",
+    sendText: "\u53d1\u9001\u9a8c\u8bc1\u7801",
+    resendText: "\u6ca1\u6709\u6536\u5230\uff1f\u91cd\u65b0\u53d1\u9001",
+    submitText: "\u786e\u8ba4\u767b\u5f55",
+    footnote: "\u672a\u6ce8\u518c\u7684\u90ae\u7bb1\u5c06\u81ea\u52a8\u521b\u5efa\u8d26\u53f7"
+  },
+  [AUTH_MODE.PASSWORD]: {
+    title: "\u90ae\u7bb1\u5bc6\u7801\u767b\u5f55",
+    description: "\u4f7f\u7528\u90ae\u7bb1\u548c\u5bc6\u7801\u76f4\u63a5\u767b\u5f55\uff0c\u4fdd\u6301\u73b0\u6709\u9879\u76ee\u7684\u8f7b\u91cf\u4f53\u9a8c",
+    sendText: "",
+    resendText: "",
+    submitText: "\u767b\u5f55",
+    footnote: "\u8fd8\u6ca1\u6709\u8bbe\u7f6e\u5bc6\u7801\uff1f\u5207\u6362\u5230\u201c\u8bbe\u7f6e\u5bc6\u7801\u201d\u5373\u53ef\u5b8c\u6210\u521d\u59cb\u5316\u6216\u91cd\u7f6e"
+  },
+  [AUTH_MODE.SETUP]: {
+    title: "\u8bbe\u7f6e\u5bc6\u7801",
+    description: "\u5148\u9a8c\u8bc1\u90ae\u7bb1\uff0c\u518d\u4e3a\u5f53\u524d\u8d26\u53f7\u8bbe\u7f6e\u6216\u91cd\u7f6e\u5bc6\u7801",
+    sendText: "\u53d1\u9001\u9a8c\u8bc1\u90ae\u4ef6",
+    resendText: "\u6ca1\u6709\u6536\u5230\uff1f\u91cd\u65b0\u53d1\u9001",
+    submitText: "\u786e\u8ba4\u8bbe\u7f6e\u5bc6\u7801",
+    footnote: "\u5efa\u8bae\u81f3\u5c11\u7528\u9a8c\u8bc1\u7801\u767b\u5f55\u8fc7\u4e00\u6b21\uff0c\u786e\u4fdd\u8be5\u90ae\u7bb1\u5df2\u5728 CloudBase \u4e2d\u5efa\u7acb\u8d26\u53f7"
+  }
+};
 
 const DAILY_QUOTES = [
   { text: "\u957f\u98ce\u7834\u6d6a\u4f1a\u6709\u65f6\uff0c\u76f4\u6302\u4e91\u5e06\u6d4e\u6ca7\u6d77\u3002", source: "\u674e\u767d\u300a\u884c\u8def\u96be\u300b" },
@@ -85,6 +117,73 @@ const DEFAULT_CATEGORY_DEFINITIONS = [
 ];
 const DEFAULT_CATEGORY_LABEL = "\uD83E\uDDE9 \u672A\u547D\u540D";
 const DEFAULT_CATEGORY_COLOR = "#8c8c8c";
+const TASK_CATEGORY_GROUPS = [
+  {
+    key: "work",
+    label: "\u5DE5\u4F5C",
+    icon: "\uD83D\uDCBC",
+    description: "\u805A\u7126\u4EA4\u4ED8\u3001\u534F\u540C\u4E0E\u7A33\u5B9A\u63A8\u8FDB",
+    subcategories: [
+      { key: "meeting", label: "\u4F1A\u8BAE", keywords: ["\u4F1A\u8BAE", "\u8BC4\u5BA1", "\u6C47\u62A5", "\u6C9F\u901A"] },
+      { key: "coordination", label: "\u534F\u540C", keywords: ["\u5BF9\u63A5", "\u534F\u540C", "\u8DDF\u8FDB", "\u63A8\u8FDB"] },
+      { key: "delivery", label: "\u4EA4\u4ED8", keywords: ["\u4EA4\u4ED8", "\u63D0\u4EA4", "\u8F93\u51FA", "\u4E0A\u7EBF"] },
+      { key: "review", label: "\u590D\u76D8", keywords: ["\u590D\u76D8", "\u603B\u7ED3", "\u56DE\u987E", "\u6C47\u603B"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
+    key: "explore",
+    label: "\u63A2\u7D22",
+    icon: "\uD83E\uDDED",
+    description: "\u4EE5\u8C03\u7814\u548C\u8BD5\u9A8C\u4E3A\u4E3B\u7684\u65B0\u65B9\u5411\u6478\u7D22",
+    subcategories: [
+      { key: "research", label: "\u8C03\u7814", keywords: ["\u8C03\u7814", "\u7814\u7A76", "\u68C0\u7D22", "\u8D44\u6599"] },
+      { key: "benchmark", label: "\u7ADE\u54C1", keywords: ["\u7ADE\u54C1", "\u5BF9\u6807", "\u53C2\u8003", "\u62C6\u89E3"] },
+      { key: "experiment", label: "\u8BD5\u9A8C", keywords: ["\u8BD5\u9A8C", "demo", "proof", "poc", "\u9A8C\u8BC1"] },
+      { key: "insight", label: "\u6D1E\u5BDF", keywords: ["\u6D1E\u5BDF", "\u7075\u611F", "\u53D1\u73B0", "\u5077\u5E08"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
+    key: "topic",
+    label: "\u8BFE\u9898",
+    icon: "\uD83D\uDCD1",
+    description: "\u56F4\u7ED5\u4E13\u9898\u8FDB\u884C\u62C6\u89E3\u3001\u5199\u4F5C\u548C\u6DF1\u5EA6\u601D\u8003",
+    subcategories: [
+      { key: "paper", label: "\u8D44\u6599", keywords: ["\u8D44\u6599", "\u6587\u6863", "\u6587\u732E", "\u8BBA\u6587"] },
+      { key: "analysis", label: "\u62C6\u89E3", keywords: ["\u62C6\u89E3", "\u5206\u6790", "\u7ED3\u6784", "\u5927\u7EB2"] },
+      { key: "writing", label: "\u5199\u4F5C", keywords: ["\u5199", "\u8349\u7A3F", "\u65B9\u6848", "\u7A3F"] },
+      { key: "discussion", label: "\u7814\u8BA8", keywords: ["\u8BA8\u8BBA", "\u7814\u8BA8", "\u8BFE\u9898", "\u4E13\u9898"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
+    key: "dev",
+    label: "\u5F00\u53D1",
+    icon: "\uD83D\uDCBB",
+    description: "\u9762\u5411\u4EA7\u54C1\u6216\u5DE5\u5177\u7684\u8BBE\u8BA1\u3001\u5F00\u53D1\u548C\u4FEE\u590D",
+    subcategories: [
+      { key: "coding", label: "\u7F16\u7801", keywords: ["\u5F00\u53D1", "\u7F16\u7801", "code", "\u5B9E\u73B0"] },
+      { key: "debug", label: "\u8C03\u8BD5", keywords: ["bug", "\u8C03\u8BD5", "\u4FEE\u590D", "\u62A5\u9519"] },
+      { key: "refactor", label: "\u91CD\u6784", keywords: ["\u91CD\u6784", "\u4F18\u5316", "\u6574\u7406", "\u62BD\u8C61"] },
+      { key: "testing", label: "\u8054\u8C03", keywords: ["\u6D4B\u8BD5", "\u8054\u8C03", "\u9A8C\u6536", "\u53D1\u5E03"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
+    key: "study",
+    label: "\u5B66\u4E60",
+    icon: "\uD83D\uDCD8",
+    description: "\u4EE5\u5438\u6536\u3001\u5185\u5316\u548C\u7EC3\u4E60\u4E3A\u76EE\u6807\u7684\u65F6\u95F4\u6295\u5165",
+    subcategories: [
+      { key: "reading", label: "\u9605\u8BFB", keywords: ["\u9605\u8BFB", "\u8BFB\u4E66", "\u8BFB", "\u7CBE\u8BFB"] },
+      { key: "english", label: "\u82F1\u8BED", keywords: ["\u82F1\u8BED", "english", "\u5355\u8BCD", "\u53E3\u8BED"] },
+      { key: "course", label: "\u8BFE\u7A0B", keywords: ["\u8BFE\u7A0B", "\u4E0A\u8BFE", "\u542C\u8BFE", "\u5B66\u4E60"] },
+      { key: "practice", label: "\u7EC3\u4E60", keywords: ["\u7EC3\u4E60", "\u5237\u9898", "\u8BAD\u7EC3", "\u5B9E\u64CD"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  }
+];
 
 const STATUS_COLUMNS = {
   todo: "col-todo",
@@ -126,6 +225,7 @@ const state = {
   selectedDate: toDateInputValue(new Date()),
   boardDate: toDateInputValue(new Date()),
   bedtimeReviewDate: toDateInputValue(new Date()),
+  taskCategoryDate: toDateInputValue(new Date()),
   activePage: "dashboard",
   voiceEffectsEnabled: true,
   optionalTagMode: DEFAULT_OPTIONAL_TAG_MODE,
@@ -179,12 +279,17 @@ const refs = {
   durationPreview: document.getElementById("duration-preview"),
   resetForm: document.getElementById("reset-form"),
   bedtimeReviewPage: document.getElementById("bedtime-review-page"),
+  taskCategoryPage: document.getElementById("task-category-page"),
   bedtimeReviewWeekDisplay: document.getElementById("bedtime-review-week-display"),
   bedtimeReviewPrevWeekBtn: document.getElementById("bedtime-review-prev-week-btn"),
   bedtimeReviewNextWeekBtn: document.getElementById("bedtime-review-next-week-btn"),
   bedtimeReviewSummary: document.getElementById("bedtime-review-summary"),
   bedtimeReviewGroups: document.getElementById("bedtime-review-groups"),
   bedtimeReviewBackBtn: document.getElementById("bedtime-review-back-btn"),
+  taskCategoryDate: document.getElementById("task-category-page-date"),
+  taskCategorySummaryPanel: document.getElementById("task-category-page-summary"),
+  taskCategoryCards: document.getElementById("task-category-page-cards"),
+  taskCategoryBackBtn: document.getElementById("task-category-page-back-btn"),
   selectedDate: document.getElementById("selected-date"),
   selectedWeek: document.getElementById("selected-week"),
   modeDayBtn: document.getElementById("mode-day"),
@@ -221,17 +326,30 @@ const authRefs = {
   menuDropdown: document.getElementById("menu-dropdown"),
   menuVoiceToggle: document.getElementById("menu-voice-toggle"),
   menuBedtimeReviewBtn: document.getElementById("menu-bedtime-review-btn"),
+  menuTaskCategoryBtn: document.getElementById("menu-task-category-btn"),
   menuAuthBtn: document.getElementById("menu-auth-btn"),
   menuAccountValue: document.getElementById("menu-account-value"),
   loginCloseBtn: document.getElementById("login-close-btn"),
   loginLogo: document.getElementById("login-logo"),
   loginLogoFallback: document.getElementById("login-logo-fallback"),
+  loginTitle: document.getElementById("login-title"),
+  loginDescription: document.getElementById("login-description"),
+  loginFootnote: document.getElementById("login-footnote"),
+  modeCodeBtn: document.getElementById("login-mode-code"),
+  modePasswordBtn: document.getElementById("login-mode-password"),
+  modeSetupBtn: document.getElementById("login-mode-setup"),
   quoteText: document.getElementById("daily-quote-text"),
   quoteSource: document.getElementById("daily-quote-source"),
   loginForm: document.getElementById("login-form"),
   emailInput: document.getElementById("login-email"),
   codeField: document.getElementById("login-code-field"),
   codeInput: document.getElementById("login-code"),
+  passwordField: document.getElementById("login-password-field"),
+  passwordInput: document.getElementById("login-password"),
+  newPasswordField: document.getElementById("login-new-password-field"),
+  newPasswordInput: document.getElementById("login-new-password"),
+  confirmPasswordField: document.getElementById("login-confirm-password-field"),
+  confirmPasswordInput: document.getElementById("login-confirm-password"),
   message: document.getElementById("login-message"),
   sendBtn: document.getElementById("login-send-btn"),
   authActions: document.getElementById("login-auth-actions"),
@@ -243,6 +361,7 @@ const authState = {
   app: null,
   auth: null,
   user: null,
+  mode: AUTH_MODE.CODE,
   verificationContext: null,
   isLoading: false,
   codeSent: false,
@@ -269,6 +388,9 @@ function init() {
   setVoiceEffectsEnabled(loadVoiceEffectsPreference(), { skipPersist: true });
   refs.selectedDate.value = state.selectedDate;
   refs.boardDate.value = state.boardDate;
+  if (refs.taskCategoryDate) {
+    refs.taskCategoryDate.value = state.taskCategoryDate;
+  }
 
   refs.form.addEventListener("submit", onSubmitTask);
   refs.resetForm.addEventListener("click", resetForm);
@@ -293,6 +415,18 @@ function init() {
     state.boardDate = refs.boardDate.value;
     renderBoard();
   });
+  if (refs.taskCategoryDate) {
+    refs.taskCategoryDate.addEventListener("input", () => {
+      const nextDate = normalizeDateInputValue(refs.taskCategoryDate.value);
+      state.taskCategoryDate = nextDate;
+      state.selectedDate = nextDate;
+      if (refs.selectedDate) {
+        refs.selectedDate.value = nextDate;
+      }
+      renderAllocationOverview();
+      renderTaskCategoryPage();
+    });
+  }
   if (refs.bedtimeReviewPrevWeekBtn) {
     refs.bedtimeReviewPrevWeekBtn.addEventListener("click", () => {
       shiftBedtimeReviewWeek(-1);
@@ -305,6 +439,11 @@ function init() {
   }
   if (refs.bedtimeReviewBackBtn) {
     refs.bedtimeReviewBackBtn.addEventListener("click", () => {
+      setActivePage("dashboard");
+    });
+  }
+  if (refs.taskCategoryBackBtn) {
+    refs.taskCategoryBackBtn.addEventListener("click", () => {
       setActivePage("dashboard");
     });
   }
@@ -598,7 +737,37 @@ function bindEmailCodeLoginEvents() {
   if (authRefs.loginForm) {
     authRefs.loginForm.addEventListener("submit", (event) => {
       event.preventDefault();
-      void handleLoginWithCode();
+      void handleLoginSubmit();
+    });
+  }
+
+  if (authRefs.modeCodeBtn) {
+    authRefs.modeCodeBtn.addEventListener("click", () => {
+      setAuthMode(AUTH_MODE.CODE);
+    });
+  }
+
+  if (authRefs.modePasswordBtn) {
+    authRefs.modePasswordBtn.addEventListener("click", () => {
+      setAuthMode(AUTH_MODE.PASSWORD);
+    });
+  }
+
+  if (authRefs.modeSetupBtn) {
+    authRefs.modeSetupBtn.addEventListener("click", () => {
+      setAuthMode(AUTH_MODE.SETUP);
+    });
+  }
+
+  if (authRefs.newPasswordInput) {
+    authRefs.newPasswordInput.addEventListener("input", () => {
+      clearLoginFieldInvalidState([authRefs.newPasswordField, authRefs.confirmPasswordField]);
+    });
+  }
+
+  if (authRefs.confirmPasswordInput) {
+    authRefs.confirmPasswordInput.addEventListener("input", () => {
+      clearLoginFieldInvalidState([authRefs.newPasswordField, authRefs.confirmPasswordField]);
     });
   }
 
@@ -617,6 +786,56 @@ function bindEmailCodeLoginEvents() {
   }
 
   window.addEventListener("beforeunload", clearCountdownTimer);
+}
+
+function setAuthMode(mode, options = {}) {
+  if (!Object.values(AUTH_MODE).includes(mode)) {
+    return;
+  }
+
+  authState.mode = mode;
+  resetAuthFlowState();
+
+  if (!options.preserveMessage) {
+    setLoginMessage("", "info");
+  }
+
+  updateLoginView();
+}
+
+function resetAuthFlowState() {
+  authState.verificationContext = null;
+  authState.codeSent = false;
+  authState.countdown = 0;
+  clearCountdownTimer();
+  clearLoginFieldInvalidState([authRefs.newPasswordField, authRefs.confirmPasswordField]);
+
+  if (authRefs.codeInput) {
+    authRefs.codeInput.value = "";
+  }
+  if (authRefs.passwordInput) {
+    authRefs.passwordInput.value = "";
+  }
+  if (authRefs.newPasswordInput) {
+    authRefs.newPasswordInput.value = "";
+  }
+  if (authRefs.confirmPasswordInput) {
+    authRefs.confirmPasswordInput.value = "";
+  }
+}
+
+async function handleLoginSubmit() {
+  if (authState.mode === AUTH_MODE.PASSWORD) {
+    await handleLoginWithPassword();
+    return;
+  }
+
+  if (authState.mode === AUTH_MODE.SETUP) {
+    await handleSetPassword();
+    return;
+  }
+
+  await handleLoginWithCode();
 }
 
 function bindGlobalMenuEvents() {
@@ -640,6 +859,11 @@ function bindGlobalMenuEvents() {
       handleOpenBedtimeReviewFromMenu();
     });
   }
+  if (authRefs.menuTaskCategoryBtn) {
+    authRefs.menuTaskCategoryBtn.addEventListener("click", () => {
+      handleOpenTaskCategoryFromMenu();
+    });
+  }
   if (authRefs.menuVoiceToggle) {
     authRefs.menuVoiceToggle.addEventListener("change", (event) => {
       setVoiceEffectsEnabled(Boolean(event.target.checked));
@@ -661,6 +885,16 @@ function handleOpenBedtimeReviewFromMenu() {
   const preferredDate = (refs.selectedDate && refs.selectedDate.value) || state.selectedDate || toDateInputValue(new Date());
   state.bedtimeReviewDate = preferredDate;
   setActivePage("bedtime-review");
+}
+
+function handleOpenTaskCategoryFromMenu() {
+  closeGlobalMenu();
+  const preferredDate = (refs.selectedDate && refs.selectedDate.value) || state.selectedDate || toDateInputValue(new Date());
+  state.taskCategoryDate = normalizeDateInputValue(preferredDate);
+  if (refs.taskCategoryDate) {
+    refs.taskCategoryDate.value = state.taskCategoryDate;
+  }
+  setActivePage("task-category");
 }
 
 async function handleMenuAuthAction() {
@@ -823,7 +1057,12 @@ async function handleAuthLoginStateChanged(loginState) {
     }
 
     authState.user = null;
+    authState.verificationContext = null;
+    authState.codeSent = false;
+    authState.countdown = 0;
+    clearCountdownTimer();
     clearCloudSyncState();
+    updateLoginView();
     updateMenuAuthButton();
   } catch (error) {
     console.error("Handle login state change failed:", error);
@@ -1153,25 +1392,41 @@ function showMainApp() {
 }
 
 function setActivePage(page) {
-  state.activePage = page === "bedtime-review" ? "bedtime-review" : "dashboard";
+  if (page === "bedtime-review" || page === "task-category") {
+    state.activePage = page;
+  } else {
+    state.activePage = "dashboard";
+  }
   updateActivePageView();
 }
 
 function updateActivePageView() {
+  const showDashboard = state.activePage === "dashboard";
   const showBedtimeReview = state.activePage === "bedtime-review";
+  const showTaskCategory = state.activePage === "task-category";
   if (authRefs.mainApp) {
-    authRefs.mainApp.classList.toggle("is-hidden", showBedtimeReview);
-    authRefs.mainApp.setAttribute("aria-hidden", showBedtimeReview ? "true" : "false");
+    authRefs.mainApp.classList.toggle("is-hidden", !showDashboard);
+    authRefs.mainApp.setAttribute("aria-hidden", showDashboard ? "false" : "true");
   }
   if (refs.bedtimeReviewPage) {
     refs.bedtimeReviewPage.classList.toggle("is-hidden", !showBedtimeReview);
     refs.bedtimeReviewPage.setAttribute("aria-hidden", showBedtimeReview ? "false" : "true");
   }
+  if (refs.taskCategoryPage) {
+    refs.taskCategoryPage.classList.toggle("is-hidden", !showTaskCategory);
+    refs.taskCategoryPage.setAttribute("aria-hidden", showTaskCategory ? "false" : "true");
+  }
   if (authRefs.menuBedtimeReviewBtn) {
     authRefs.menuBedtimeReviewBtn.classList.toggle("is-active", showBedtimeReview);
   }
+  if (authRefs.menuTaskCategoryBtn) {
+    authRefs.menuTaskCategoryBtn.classList.toggle("is-active", showTaskCategory);
+  }
   if (showBedtimeReview) {
     renderBedtimeReview();
+  }
+  if (showTaskCategory) {
+    renderTaskCategoryPage();
   }
 }
 
@@ -1180,25 +1435,80 @@ function updateLoginView() {
     return;
   }
 
+  const mode = authState.mode in AUTH_MODE_COPY ? authState.mode : AUTH_MODE.CODE;
+  const copy = AUTH_MODE_COPY[mode];
   const authReady = Boolean(authState.auth);
-  const shouldShowCode = authState.codeSent;
-  authRefs.codeField.classList.toggle("is-hidden", !shouldShowCode);
-  authRefs.sendBtn.classList.toggle("is-hidden", shouldShowCode);
-  authRefs.authActions.classList.toggle("is-hidden", !shouldShowCode);
+  const usesVerificationCode = mode !== AUTH_MODE.PASSWORD;
+  const shouldShowCode = usesVerificationCode && authState.codeSent;
+  const shouldShowPassword = mode === AUTH_MODE.PASSWORD;
+  const shouldShowNewPassword = mode === AUTH_MODE.SETUP;
+  const shouldShowConfirmPassword = mode === AUTH_MODE.SETUP;
+  const shouldShowSendButton = usesVerificationCode && !authState.codeSent;
+  const shouldShowAuthActions = mode === AUTH_MODE.PASSWORD || authState.codeSent;
+  const shouldShowResendButton = usesVerificationCode && authState.codeSent;
 
-  const lockEmailInput = shouldShowCode && authState.countdown > 0;
+  if (authRefs.loginTitle) {
+    authRefs.loginTitle.textContent = copy.title;
+  }
+  if (authRefs.loginDescription) {
+    authRefs.loginDescription.textContent = copy.description;
+  }
+  if (authRefs.loginFootnote) {
+    authRefs.loginFootnote.textContent = copy.footnote;
+  }
+
+  if (authRefs.modeCodeBtn) {
+    authRefs.modeCodeBtn.classList.toggle("is-active", mode === AUTH_MODE.CODE);
+    authRefs.modeCodeBtn.setAttribute("aria-selected", mode === AUTH_MODE.CODE ? "true" : "false");
+  }
+  if (authRefs.modePasswordBtn) {
+    authRefs.modePasswordBtn.classList.toggle("is-active", mode === AUTH_MODE.PASSWORD);
+    authRefs.modePasswordBtn.setAttribute("aria-selected", mode === AUTH_MODE.PASSWORD ? "true" : "false");
+  }
+  if (authRefs.modeSetupBtn) {
+    authRefs.modeSetupBtn.classList.toggle("is-active", mode === AUTH_MODE.SETUP);
+    authRefs.modeSetupBtn.setAttribute("aria-selected", mode === AUTH_MODE.SETUP ? "true" : "false");
+  }
+
+  authRefs.codeField.classList.toggle("is-hidden", !shouldShowCode);
+  if (authRefs.passwordField) {
+    authRefs.passwordField.classList.toggle("is-hidden", !shouldShowPassword);
+  }
+  if (authRefs.newPasswordField) {
+    authRefs.newPasswordField.classList.toggle("is-hidden", !shouldShowNewPassword);
+  }
+  if (authRefs.confirmPasswordField) {
+    authRefs.confirmPasswordField.classList.toggle("is-hidden", !shouldShowConfirmPassword);
+  }
+  authRefs.sendBtn.classList.toggle("is-hidden", !shouldShowSendButton);
+  authRefs.authActions.classList.toggle("is-hidden", !shouldShowAuthActions);
+  authRefs.resendBtn.classList.toggle("is-hidden", !shouldShowResendButton);
+
+  const lockEmailInput = usesVerificationCode && authState.codeSent && authState.countdown > 0;
   authRefs.emailInput.disabled = lockEmailInput || authState.isLoading;
   authRefs.sendBtn.disabled = authState.isLoading || !authReady;
   authRefs.submitBtn.disabled = authState.isLoading || !authReady;
   authRefs.resendBtn.disabled = authState.isLoading || authState.countdown > 0 || !authReady;
-
-  if (!shouldShowCode) {
-    authRefs.sendBtn.textContent = authReady ? "\u53d1\u9001\u9a8c\u8bc1\u7801" : "\u521d\u59cb\u5316\u4e2d...";
+  if (authRefs.passwordInput) {
+    authRefs.passwordInput.disabled = authState.isLoading;
+  }
+  if (authRefs.newPasswordInput) {
+    authRefs.newPasswordInput.disabled = authState.isLoading;
+  }
+  if (authRefs.confirmPasswordInput) {
+    authRefs.confirmPasswordInput.disabled = authState.isLoading;
   }
 
-  authRefs.resendBtn.textContent = authState.countdown > 0
-    ? `${authState.countdown}\u79d2\u540e\u53ef\u91cd\u65b0\u53d1\u9001`
-    : "\u6ca1\u6709\u6536\u5230\uff1f\u91cd\u65b0\u53d1\u9001";
+  authRefs.submitBtn.textContent = copy.submitText;
+  if (shouldShowSendButton) {
+    authRefs.sendBtn.textContent = authReady ? copy.sendText : "\u521d\u59cb\u5316\u4e2d...";
+  }
+
+  if (shouldShowResendButton) {
+    authRefs.resendBtn.textContent = authState.countdown > 0
+      ? `${authState.countdown}\u79d2\u540e\u53ef\u91cd\u65b0\u53d1\u9001`
+      : copy.resendText;
+  }
 }
 
 function setLoginMessage(message, type) {
@@ -1264,7 +1574,12 @@ async function handleSendCode() {
       authRefs.codeInput.value = "";
     }
     startCountdown(CODE_RESEND_SECONDS);
-    setLoginMessage("\u9a8c\u8bc1\u7801\u5df2\u53d1\u9001\uff0c\u8bf7\u67e5\u6536\u90ae\u4ef6\u3002", "success");
+    setLoginMessage(
+      authState.mode === AUTH_MODE.SETUP
+        ? "\u9a8c\u8bc1\u90ae\u4ef6\u5df2\u53d1\u9001\uff0c\u8bf7\u586b\u5199\u9a8c\u8bc1\u7801\u540e\u8bbe\u7f6e\u65b0\u5bc6\u7801\u3002"
+        : "\u9a8c\u8bc1\u7801\u5df2\u53d1\u9001\uff0c\u8bf7\u67e5\u6536\u90ae\u4ef6\u3002",
+      "success"
+    );
   } catch (error) {
     setLoginMessage(getErrorMessage(error, "\u9a8c\u8bc1\u7801\u53d1\u9001\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u90ae\u7bb1\u914d\u7f6e\u3002"), "error");
   } finally {
@@ -1318,6 +1633,176 @@ async function handleLoginWithCode() {
   }
 }
 
+async function handleLoginWithPassword() {
+  if (!authState.auth) {
+    setLoginMessage("\u8ba4\u8bc1\u670d\u52a1\u672a\u5c31\u7eea\uff0c\u8bf7\u7a0d\u5019\u518d\u8bd5\u3002", "error");
+    return;
+  }
+
+  if (!authRefs.emailInput || !authRefs.passwordInput) {
+    return;
+  }
+
+  const email = authRefs.emailInput.value.trim();
+  const password = authRefs.passwordInput.value;
+
+  if (!email || !EMAIL_REGEX.test(email)) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u6709\u6548\u7684\u90ae\u7bb1\u5730\u5740\u3002", "error");
+    return;
+  }
+
+  if (!password) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u5bc6\u7801\u3002", "error");
+    return;
+  }
+
+  setAuthLoading(true);
+  setLoginMessage("", "info");
+
+  try {
+    await signInWithPasswordCompatible(email, password);
+    setLoginMessage("\u767b\u5f55\u6210\u529f\uff0c\u6b63\u5728\u8fdb\u5165\u7cfb\u7edf...", "success");
+  } catch (error) {
+    if (isPasswordLoginDisabledError(error)) {
+      setLoginMessage("\u5f53\u524d CloudBase \u63a7\u5236\u53f0\u8fd8\u672a\u5f00\u542f\u201c\u90ae\u7bb1\u5bc6\u7801\u767b\u5f55\u201d\uff0c\u8bf7\u5148\u5728\u767b\u5f55\u6388\u6743\u4e2d\u5f00\u542f\u3002", "error");
+    } else {
+      setLoginMessage(getErrorMessage(error, "\u90ae\u7bb1\u5bc6\u7801\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u8d26\u53f7\u548c\u5bc6\u7801\u3002"), "error");
+    }
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function handleSetPassword() {
+  if (!authState.auth) {
+    setLoginMessage("\u8ba4\u8bc1\u670d\u52a1\u672a\u5c31\u7eea\uff0c\u8bf7\u7a0d\u5019\u518d\u8bd5\u3002", "error");
+    return;
+  }
+
+  if (!authRefs.emailInput || !authRefs.codeInput || !authRefs.newPasswordInput || !authRefs.confirmPasswordInput) {
+    return;
+  }
+
+  const email = authRefs.emailInput.value.trim();
+  const code = authRefs.codeInput.value.trim();
+  const newPassword = authRefs.newPasswordInput.value;
+  const confirmPassword = authRefs.confirmPasswordInput.value;
+
+  if (!email || !EMAIL_REGEX.test(email)) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u6709\u6548\u7684\u90ae\u7bb1\u5730\u5740\u3002", "error");
+    return;
+  }
+
+  if (!code) {
+    setLoginMessage("\u8bf7\u8f93\u5165\u9a8c\u8bc1\u7801\u3002", "error");
+    return;
+  }
+
+  if (!newPassword || newPassword.length < PASSWORD_MIN_LENGTH) {
+    setLoginMessage(`\u8bf7\u8f93\u5165\u81f3\u5c11 ${PASSWORD_MIN_LENGTH} \u4f4d\u7684\u65b0\u5bc6\u7801\u3002`, "error");
+    return;
+  }
+
+  if (!confirmPassword) {
+    setLoginFieldInvalidState([authRefs.confirmPasswordField]);
+    setLoginMessage("\u8bf7\u518d\u6b21\u8f93\u5165\u65b0\u5bc6\u7801\u3002", "error");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    setLoginFieldInvalidState([authRefs.newPasswordField, authRefs.confirmPasswordField]);
+    setLoginMessage("\u4e24\u6b21\u8f93\u5165\u7684\u5bc6\u7801\u4e0d\u4e00\u81f4\uff0c\u8bf7\u91cd\u65b0\u786e\u8ba4\u3002", "error");
+    return;
+  }
+
+  clearLoginFieldInvalidState([authRefs.newPasswordField, authRefs.confirmPasswordField]);
+
+  const verificationId = getVerificationId(authState.verificationContext);
+  if (!verificationId) {
+    setLoginMessage("\u9a8c\u8bc1\u4e0a\u4e0b\u6587\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u53d1\u9001\u9a8c\u8bc1\u90ae\u4ef6\u3002", "error");
+    return;
+  }
+
+  if (typeof authState.auth.verify !== "function" || typeof authState.auth.resetPassword !== "function") {
+    setLoginMessage("\u5f53\u524d CloudBase SDK \u4e0d\u652f\u6301\u8bbe\u7f6e\u5bc6\u7801\uff0c\u8bf7\u68c0\u67e5 SDK \u7248\u672c\u3002", "error");
+    return;
+  }
+
+  setAuthLoading(true);
+  setLoginMessage("", "info");
+
+  try {
+    const verifyResult = await authState.auth.verify({
+      verification_id: verificationId,
+      verification_code: code
+    });
+    const verificationToken = getVerificationToken(verifyResult);
+    if (!verificationToken) {
+      throw new Error("\u9a8c\u8bc1\u6210\u529f\u4f46\u672a\u83b7\u53d6\u5230\u5bc6\u7801\u91cd\u7f6e\u4ee4\u724c\u3002");
+    }
+
+    await authState.auth.resetPassword({
+      email,
+      new_password: newPassword,
+      verification_token: verificationToken
+    });
+
+    authState.verificationContext = null;
+    authState.codeSent = false;
+    authState.countdown = 0;
+    clearCountdownTimer();
+
+    try {
+      await signInWithPasswordCompatible(email, newPassword);
+      setLoginMessage("\u5bc6\u7801\u8bbe\u7f6e\u6210\u529f\uff0c\u6b63\u5728\u8fdb\u5165\u7cfb\u7edf...", "success");
+    } catch (loginError) {
+      if (authRefs.passwordInput) {
+        authRefs.passwordInput.value = newPassword;
+      }
+      authState.mode = AUTH_MODE.PASSWORD;
+      updateLoginView();
+      if (isPasswordLoginDisabledError(loginError)) {
+        setLoginMessage("\u5bc6\u7801\u5df2\u8bbe\u7f6e\u6210\u529f\uff0c\u4f46 CloudBase \u63a7\u5236\u53f0\u8fd8\u672a\u5f00\u542f\u90ae\u7bb1\u5bc6\u7801\u767b\u5f55\u3002", "success");
+      } else {
+        console.warn("Auto login after password setup failed:", loginError);
+        setLoginMessage("\u5bc6\u7801\u5df2\u8bbe\u7f6e\u6210\u529f\uff0c\u8bf7\u5207\u6362\u5230\u201c\u90ae\u7bb1\u5bc6\u7801\u201d\u5b8c\u6210\u767b\u5f55\u3002", "success");
+      }
+    }
+  } catch (error) {
+    setLoginMessage(getErrorMessage(error, "\u8bbe\u7f6e\u5bc6\u7801\u5931\u8d25\uff0c\u8bf7\u786e\u8ba4\u9a8c\u8bc1\u7801\u548c\u90ae\u7bb1\u72b6\u6001\u3002"), "error");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function signInWithPasswordCompatible(email, password) {
+  if (!authState.auth) {
+    throw new Error("\u8ba4\u8bc1\u670d\u52a1\u672a\u521d\u59cb\u5316\u3002");
+  }
+
+  if (typeof authState.auth.signInWithPassword === "function") {
+    const result = await authState.auth.signInWithPassword({ email, username: email, password });
+    if (result && result.error) {
+      throw result.error;
+    }
+    return result;
+  }
+
+  if (typeof authState.auth.signIn === "function") {
+    const result = await authState.auth.signIn({ username: email, email, password });
+    if (result && result.error) {
+      throw result.error;
+    }
+    return result;
+  }
+
+  if (typeof authState.auth.signInWithEmailAndPassword === "function") {
+    return authState.auth.signInWithEmailAndPassword(email, password);
+  }
+
+  throw new Error("\u5f53\u524d CloudBase SDK \u4e0d\u652f\u6301\u90ae\u7bb1\u5bc6\u7801\u767b\u5f55\uff0c\u8bf7\u68c0\u67e5 SDK \u7248\u672c\u3002");
+}
+
 function startCountdown(seconds) {
   clearCountdownTimer();
   authState.countdown = Math.max(0, Math.floor(seconds));
@@ -1347,6 +1832,57 @@ function clearCountdownTimer() {
   }
 }
 
+function setLoginFieldInvalidState(fields) {
+  fields.forEach((field) => {
+    if (!field) {
+      return;
+    }
+    field.classList.add("is-invalid");
+  });
+}
+
+function clearLoginFieldInvalidState(fields) {
+  fields.forEach((field) => {
+    if (!field) {
+      return;
+    }
+    field.classList.remove("is-invalid");
+  });
+}
+
+function getVerificationId(verificationContext) {
+  if (!verificationContext || typeof verificationContext !== "object") {
+    return "";
+  }
+  return String(
+    verificationContext.verification_id
+    || verificationContext.verificationId
+    || verificationContext.id
+    || ""
+  ).trim();
+}
+
+function getVerificationToken(verifyResult) {
+  if (!verifyResult || typeof verifyResult !== "object") {
+    return "";
+  }
+  return String(
+    verifyResult.verification_token
+    || verifyResult.verificationToken
+    || verifyResult.token
+    || ""
+  ).trim();
+}
+
+function isPasswordLoginDisabledError(error) {
+  const normalized = JSON.stringify(error || {}).toLowerCase();
+  return normalized.includes("username/password")
+    || normalized.includes("email/password")
+    || normalized.includes("password login")
+    || normalized.includes("identity source")
+    || normalized.includes("sign_in_method_not_found");
+}
+
 function getErrorMessage(error, fallbackMessage) {
   if (!error) {
     return fallbackMessage;
@@ -1356,6 +1892,9 @@ function getErrorMessage(error, fallbackMessage) {
   }
   if (typeof error.message === "string" && error.message.trim()) {
     return error.message;
+  }
+  if (typeof error.msg === "string" && error.msg.trim()) {
+    return error.msg;
   }
   return fallbackMessage;
 }
@@ -2575,6 +3114,7 @@ function renderAll() {
   renderBoard();
   renderAllocationOverview();
   renderBedtimeReview();
+  renderTaskCategoryPage();
 }
 
 function getBedtimeReviewDateValue() {
@@ -2769,6 +3309,230 @@ function renderBedtimeReview() {
     weekEmpty.textContent = "\u672C\u5468\u5165\u56F4\u4EFB\u52A1\u4E3A 0\uff0c\u5DF2\u5728\u5404\u65E5\u677F\u5757\u4E2D\u6807\u6CE8\u3002";
     refs.bedtimeReviewGroups.appendChild(weekEmpty);
   }
+}
+
+function getTaskCategoryDateValue() {
+  const raw = state.taskCategoryDate || state.selectedDate || toDateInputValue(new Date());
+  return normalizeDateInputValue(raw);
+}
+
+function renderTaskCategoryPage() {
+  if (!refs.taskCategorySummaryPanel || !refs.taskCategoryCards || !refs.taskCategoryDate) {
+    return;
+  }
+
+  const day = getTaskCategoryDateValue();
+  state.taskCategoryDate = day;
+  refs.taskCategoryDate.value = day;
+
+  const stats = computeTaskCategoryStats(day);
+  renderTaskCategorySummary(stats);
+  renderTaskCategoryCards(stats.groups);
+}
+
+function computeTaskCategoryStats(day) {
+  const dayStart = new Date(`${day}T00:00`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const groups = TASK_CATEGORY_GROUPS.map((group) => ({
+    ...group,
+    totalMinutes: 0,
+    subcategoryTotals: Object.fromEntries(group.subcategories.map((item) => [item.key, 0]))
+  }));
+
+  let usedMinutes = 0;
+
+  state.tasks.forEach((task) => {
+    const range = getTaskRange(task);
+    if (!range) {
+      return;
+    }
+
+    const overlap = getOverlapMinutes(range.start, range.end, dayStart, dayEnd);
+    if (overlap <= 0) {
+      return;
+    }
+
+    usedMinutes += overlap;
+    const taskCategories = getTaskCategories(task);
+    const taskText = `${task.name || ""} ${task.detail || ""}`;
+
+    groups.forEach((group) => {
+      if (!taskCategories.includes(group.key)) {
+        return;
+      }
+
+      const share = overlap / taskCategories.length;
+      group.totalMinutes += share;
+
+      const matchedSubcategories = matchTaskSubcategories(group, taskText);
+      const fallbackKey = getTaskCategoryFallbackKey(group);
+      const targets = matchedSubcategories.length ? matchedSubcategories : [fallbackKey];
+      const subShare = share / targets.length;
+
+      targets.forEach((subcategoryKey) => {
+        if (Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
+          group.subcategoryTotals[subcategoryKey] += subShare;
+        }
+      });
+    });
+  });
+
+  const normalizedGroups = groups.map((group) => ({
+    ...group,
+    percent: usedMinutes > 0 ? (group.totalMinutes / usedMinutes) * 100 : 0,
+    subcategories: group.subcategories.map((item) => ({
+      ...item,
+      minutes: group.subcategoryTotals[item.key] || 0
+    }))
+  }));
+
+  const activeGroups = normalizedGroups.filter((group) => group.totalMinutes > 0);
+  const topGroup = normalizedGroups
+    .slice()
+    .sort((left, right) => right.totalMinutes - left.totalMinutes)[0] || null;
+
+  return {
+    day,
+    usedMinutes,
+    activeGroupCount: activeGroups.length,
+    topGroup,
+    groups: normalizedGroups
+  };
+}
+
+function renderTaskCategorySummary(stats) {
+  refs.taskCategorySummaryPanel.innerHTML = "";
+
+  const topLabel = stats.topGroup && stats.topGroup.totalMinutes > 0
+    ? `${stats.topGroup.icon} ${stats.topGroup.label}`
+    : "\u6682\u65E0";
+  const topDuration = stats.topGroup && stats.topGroup.totalMinutes > 0
+    ? formatDuration(stats.topGroup.totalMinutes)
+    : "--";
+
+  const items = [
+    { label: "\u5DF2\u8BB0\u5F55\u65F6\u957F", value: formatDuration(stats.usedMinutes) },
+    { label: "\u5DF2\u6FC0\u6D3B\u5927\u7C7B", value: `${stats.activeGroupCount}/${TASK_CATEGORY_GROUPS.length}` },
+    { label: "\u4ECA\u65E5\u4E3B\u7EBF", value: `${topLabel} ${topDuration}` }
+  ];
+
+  items.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "summary-item";
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    const value = document.createElement("strong");
+    value.textContent = item.value;
+    card.appendChild(label);
+    card.appendChild(value);
+    refs.taskCategorySummaryPanel.appendChild(card);
+  });
+}
+
+function renderTaskCategoryCards(groups) {
+  refs.taskCategoryCards.innerHTML = "";
+
+  groups.forEach((group, index) => {
+    const card = document.createElement("article");
+    card.className = "task-category-card";
+    card.style.setProperty("--task-category-accent", getCategoryColorByKey(group.key, index));
+
+    const head = document.createElement("div");
+    head.className = "task-category-card-head";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "task-category-card-title-wrap";
+
+    const title = document.createElement("h3");
+    title.textContent = `${group.icon} ${group.label}`;
+
+    const description = document.createElement("p");
+    description.className = "task-category-card-description";
+    description.textContent = group.description;
+
+    titleWrap.appendChild(title);
+    titleWrap.appendChild(description);
+
+    const metric = document.createElement("div");
+    metric.className = "task-category-card-metric";
+
+    const duration = document.createElement("strong");
+    duration.textContent = formatDuration(group.totalMinutes);
+
+    const progress = document.createElement("span");
+    progress.textContent = `\u5DF2\u8FDB\u884C ${formatDuration(group.totalMinutes)}`;
+
+    metric.appendChild(duration);
+    metric.appendChild(progress);
+
+    head.appendChild(titleWrap);
+    head.appendChild(metric);
+
+    const meta = document.createElement("div");
+    meta.className = "task-category-card-meta";
+
+    const share = document.createElement("span");
+    share.className = "task-category-meta-pill";
+    share.textContent = `\u5360\u5DF2\u8BB0\u5F55 ${group.percent.toFixed(1)}%`;
+
+    const sync = document.createElement("span");
+    sync.className = "task-category-meta-pill";
+    sync.textContent = `\u540C\u6B65 ${getCategoryLabelByKey(group.key)}`;
+
+    meta.appendChild(share);
+    meta.appendChild(sync);
+
+    const subTitle = document.createElement("p");
+    subTitle.className = "task-category-subtitle";
+    subTitle.textContent = "\u5C0F\u7C7B\u5206\u5E03";
+
+    const subList = document.createElement("div");
+    subList.className = "task-category-subgrid";
+
+    group.subcategories.forEach((item) => {
+      const chip = document.createElement("div");
+      chip.className = "task-category-subitem";
+      if (item.minutes > 0) {
+        chip.classList.add("is-active");
+      }
+
+      const label = document.createElement("span");
+      label.textContent = item.label;
+
+      const minutes = document.createElement("strong");
+      minutes.textContent = item.minutes > 0 ? formatDuration(item.minutes) : "--";
+
+      chip.appendChild(label);
+      chip.appendChild(minutes);
+      subList.appendChild(chip);
+    });
+
+    card.appendChild(head);
+    card.appendChild(meta);
+    card.appendChild(subTitle);
+    card.appendChild(subList);
+    refs.taskCategoryCards.appendChild(card);
+  });
+}
+
+function matchTaskSubcategories(group, text) {
+  const normalizedText = normalizeKeywordText(text);
+  if (!normalizedText) {
+    return [];
+  }
+
+  return group.subcategories
+    .filter((item) => Array.isArray(item.keywords) && item.keywords.some((keyword) => normalizedText.includes(normalizeKeywordText(keyword))))
+    .map((item) => item.key);
+}
+
+function getTaskCategoryFallbackKey(group) {
+  const fallback = group.subcategories.find((item) => !Array.isArray(item.keywords) || !item.keywords.length);
+  return fallback ? fallback.key : group.subcategories[0].key;
+}
+
+function normalizeKeywordText(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function setAllocationMode(mode) {
@@ -3750,6 +4514,11 @@ function formatDuration(minutes) {
 
 function toDateInputValue(date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function normalizeDateInputValue(value) {
+  const normalized = normalizeDateTimeInput(`${value || ""}T00:00`).slice(0, 10);
+  return normalized || toDateInputValue(new Date());
 }
 
 function pad2(num) {

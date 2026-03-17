@@ -1,10 +1,10 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>24h任务效率看板</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260317-01">
 </head>
 <body>
   <div class="global-menu" id="global-menu">
@@ -25,6 +25,10 @@
         <span class="menu-toggle-label">🌙 睡前回顾</span>
         <span class="menu-nav-arrow" aria-hidden="true">›</span>
       </button>
+      <button id="menu-task-category-btn" type="button" class="menu-nav-row" role="menuitem">
+        <span class="menu-toggle-label">🗂 任务分类</span>
+        <span class="menu-nav-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="menu-divider" aria-hidden="true"></div>
       <button id="menu-auth-btn" type="button" class="menu-action-btn" role="menuitem">登录</button>
     </div>
@@ -40,12 +44,18 @@
       <p id="daily-quote-source" class="daily-quote-source"></p>
     </div>
 
-    <section class="login-card" aria-label="邮箱验证码登录">
+    <section class="login-card" aria-label="邮箱登录">
       <button id="login-close-btn" type="button" class="secondary login-close-btn" aria-label="关闭登录窗口">×</button>
       <header class="login-head">
-        <h1>验证码登录</h1>
-        <p>无需记忆密码，使用邮箱验证码快捷登录</p>
+        <h1 id="login-title">验证码登录</h1>
+        <p id="login-description">无需记忆密码，使用邮箱验证码快捷登录</p>
       </header>
+
+      <div id="login-mode-switch" class="login-mode-switch" role="tablist" aria-label="登录方式切换">
+        <button id="login-mode-code" type="button" class="login-mode-btn is-active" role="tab" aria-selected="true">验证码登录</button>
+        <button id="login-mode-password" type="button" class="login-mode-btn" role="tab" aria-selected="false">邮箱密码</button>
+        <button id="login-mode-setup" type="button" class="login-mode-btn" role="tab" aria-selected="false">设置密码</button>
+      </div>
 
       <form id="login-form" class="login-form" novalidate>
         <label class="login-field">
@@ -61,6 +71,30 @@
           <input id="login-code" type="text" placeholder="输入6位验证码" maxlength="6" inputmode="numeric">
         </label>
 
+        <label id="login-password-field" class="login-field is-hidden">
+          <span>登录密码</span>
+          <div class="login-input-wrap">
+            <span class="login-lock-icon">🔒</span>
+            <input id="login-password" type="password" placeholder="输入邮箱密码" autocomplete="current-password">
+          </div>
+        </label>
+
+        <label id="login-new-password-field" class="login-field is-hidden">
+          <span>新密码</span>
+          <div class="login-input-wrap">
+            <span class="login-lock-icon">🔑</span>
+            <input id="login-new-password" type="password" placeholder="至少 6 位，建议包含字母和数字" autocomplete="new-password">
+          </div>
+        </label>
+
+        <label id="login-confirm-password-field" class="login-field is-hidden">
+          <span>确认密码</span>
+          <div class="login-input-wrap">
+            <span class="login-lock-icon">🔐</span>
+            <input id="login-confirm-password" type="password" placeholder="再次输入新密码" autocomplete="new-password">
+          </div>
+        </label>
+
         <div id="login-message" class="login-message is-hidden" role="status" aria-live="polite"></div>
 
         <div class="login-actions">
@@ -72,7 +106,7 @@
         </div>
       </form>
 
-      <footer class="login-footnote">未注册的邮箱将自动创建账号</footer>
+      <footer id="login-footnote" class="login-footnote">未注册的邮箱将自动创建账号</footer>
     </section>
   </section>
 
@@ -293,6 +327,28 @@
     </section>
   </section>
 
+  <section id="task-category-page" class="app task-category-page is-hidden" aria-hidden="true">
+    <header class="app-header task-category-header">
+      <h1>任务分类</h1>
+      <p>按天查看你的 5 个重点任务大类，卡片数据与“每日24h分配”保持同步。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>分类投入</h2>
+        <div class="head-tools task-category-tools">
+          <label id="task-category-page-date-label">
+            查看日期
+            <input id="task-category-page-date" type="date">
+          </label>
+          <button id="task-category-page-back-btn" type="button" class="secondary">返回看板</button>
+        </div>
+      </div>
+      <div id="task-category-page-summary" class="summary-row"></div>
+      <div id="task-category-page-cards" class="task-category-cards"></div>
+    </section>
+  </section>
+
   <div id="category-manager-modal" class="category-manager-modal is-hidden" aria-hidden="true">
     <div id="category-manager-dialog" class="category-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
       <div class="category-manager-head">
@@ -348,6 +404,6 @@
   <audio id="random-task-completion-sound" preload="auto"></audio>
 
   <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
-  <script src="app.js?v=20260309-10"></script>
+  <script src="app.js?v=20260317-01"></script>
 </body>
 </html>
