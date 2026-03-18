@@ -395,38 +395,6 @@ function init() {
   state.taskCategorySubcategoryConfig = loadTaskCategorySubcategoryConfig();
   state.tasks = loadTasks();
   ensureCategoryDefinitionsForTasks(state.tasks);
-  const repairedCategoryDefinitions = state.categoryDefinitions.map((definition) => {
-    const nextLabel = repairMojibakeCategoryLabel(definition.label, definition.key);
-    if (nextLabel === definition.label) {
-      return definition;
-    }
-    return {
-      ...definition,
-      label: nextLabel
-    };
-  });
-  const shouldPersistCategoryRepair = repairedCategoryDefinitions.some((item, index) => item.label !== state.categoryDefinitions[index].label);
-  if (shouldPersistCategoryRepair) {
-    state.categoryDefinitions = repairedCategoryDefinitions;
-    saveCategoryDefinitions();
-  }
-  const repairedTasks = state.tasks.map((task) => {
-    const nextName = repairPotentialMojibakeText(task.name, "", 50);
-    const nextDetail = repairPotentialMojibakeText(task.detail, "", 200);
-    if (nextName === task.name && nextDetail === task.detail) {
-      return task;
-    }
-    return {
-      ...task,
-      name: nextName,
-      detail: nextDetail
-    };
-  });
-  const shouldPersistTaskRepair = repairedTasks.some((item, index) => item !== state.tasks[index]);
-  if (shouldPersistTaskRepair) {
-    state.tasks = repairedTasks;
-    saveTasks();
-  }
   setVoiceEffectsEnabled(loadVoiceEffectsPreference(), { skipPersist: true });
   refs.selectedDate.value = state.selectedDate;
   refs.boardDate.value = state.boardDate;
@@ -1395,7 +1363,7 @@ function buildCloudSyncFailureHint(error) {
     return "";
   }
 
-  return `CloudBase 可能发生跨域拦截，请在云开发控制台将当前域名加入 Web 安全域名：${window.location.origin}`;
+  return `CloudBase 鍙兘鍙戠敓璺ㄥ煙鎷︽埅锛岃鍦ㄤ簯寮€鍙戞帶鍒跺彴灏嗗綋鍓嶅煙鍚嶅姞鍏?Web 瀹夊叏鍩熷悕锛?{window.location.origin}`;
 }
 
 function getUpdatedCountFromUpdateResult(result) {
@@ -2020,11 +1988,7 @@ function restoreTaskFormDraft() {
   }
 
   refs.taskId.value = typeof draft.taskId === "string" ? draft.taskId : "";
-  refs.taskName.value = repairPotentialMojibakeText(
-    typeof draft.name === "string" ? draft.name : "",
-    "",
-    50
-  );
+  refs.taskName.value = typeof draft.name === "string" ? draft.name : "";
   refs.taskPriority.value = PRIORITY_MAP[draft.priority] ? draft.priority : "important_not_urgent";
   setSelectedImportanceLevelToForm(draft.importanceLevel);
   setSelectedUrgentLevelToForm(draft.urgentLevel);
@@ -2034,11 +1998,7 @@ function restoreTaskFormDraft() {
   setSelectedProcessScoreToForm(draft.processScore);
   setOptionalTagMode(draft.optionalTagMode);
   handlePriorityChange();
-  refs.taskDetail.value = repairPotentialMojibakeText(
-    typeof draft.detail === "string" ? draft.detail : "",
-    "",
-    200
-  );
+  refs.taskDetail.value = typeof draft.detail === "string" ? draft.detail.slice(0, 200) : "";
 
   if (refs.taskStart && refs.taskEnd) {
     refs.taskStart.value = normalizeDateTimeInput(draft.startAt || "");
@@ -2147,102 +2107,12 @@ function normalizeCategoryKey(value) {
   return raw.replace(/[^a-z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-const KNOWN_MOJIBAKE_FRAGMENT_MAP = Object.freeze({
-  "鏈懆": "本周",
-  "鏆傛棤": "暂无",
-  "鍙兘": "可能",
-  "绫诲埆": "类别",
-  "鐢ㄦ椂": "用时",
-  "绱": "累计",
-  "鎺掑悕": "排名",
-  "褰撳墠": "当前",
-  "鍩熷悕": "域名",
-  "璺ㄥ煙": "跨域",
-  "鎷︽埅": "拦截",
-  "鍔犲叆": "加入",
-  "浠诲姟": "任务",
-  "璇︽儏": "详情",
-  "鏃堕棿": "时间",
-  "鏁堢巼": "效率",
-  "鐪嬫澘": "看板"
-});
-
-function repairKnownMojibakeFragments(value) {
-  let next = String(value || "");
-  if (!next) {
-    return "";
-  }
-
-  Object.entries(KNOWN_MOJIBAKE_FRAGMENT_MAP).forEach(([broken, fixed]) => {
-    if (next.includes(broken)) {
-      next = next.split(broken).join(fixed);
-    }
-  });
-
-  return next;
-}
-
-function isLikelyMojibakeText(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return false;
-  }
-  if (text.includes("�")) {
-    return true;
-  }
-  if (/(?:Ã.|Â.|æ|å|ç|é|ï|ð|¤)/.test(text)) {
-    return true;
-  }
-  if (/[棣冃閺顖鍙鎳璺鐓锔烘偲鍋瞸馃课锟]/.test(text)) {
-    return true;
-  }
-  const suspiciousGlyphCount = (text.match(/[锟鏃寮濂鎴鐨浠绫鍒璁褰鎵鍏]/g) || []).length;
-  return suspiciousGlyphCount >= 3;
-}
-
-function tryDecodeUtf8FromLatin1(value) {
-  const text = String(value || "");
-  if (!text) {
-    return "";
-  }
-
-  const chars = Array.from(text);
-  if (!chars.length || chars.some((char) => char.charCodeAt(0) > 0xff)) {
-    return "";
-  }
-
-  try {
-    const bytes = Uint8Array.from(chars, (char) => char.charCodeAt(0));
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim();
-  } catch {
-    return "";
-  }
-}
-
-function repairPotentialMojibakeText(value, fallback = "", maxLength = 200) {
+function normalizeCategoryLabel(value, fallback = DEFAULT_CATEGORY_LABEL) {
   const raw = String(value || "").trim();
   if (!raw) {
     return fallback;
   }
-
-  let next = repairKnownMojibakeFragments(raw);
-  if (isLikelyMojibakeText(next)) {
-    const decoded = tryDecodeUtf8FromLatin1(next);
-    if (decoded && !isLikelyMojibakeText(decoded)) {
-      next = repairKnownMojibakeFragments(decoded);
-    }
-  }
-
-  const normalized = next.trim();
-  if (!normalized) {
-    return fallback;
-  }
-
-  return Number.isFinite(maxLength) && maxLength > 0 ? normalized.slice(0, maxLength) : normalized;
-}
-
-function normalizeCategoryLabel(value, fallback = DEFAULT_CATEGORY_LABEL) {
-  return repairPotentialMojibakeText(value, fallback, 24);
+  return raw.slice(0, 24);
 }
 
 function normalizeCategoryColor(value, fallback = DEFAULT_CATEGORY_COLOR) {
@@ -2280,10 +2150,7 @@ function getDefaultCategoryKey(definitions = state.categoryDefinitions) {
 function getCategoryLabelByKey(key, definitions = state.categoryDefinitions) {
   const map = getCategoryDefinitionsMap(definitions);
   const found = map.get(key);
-  if (!found) {
-    return String(key || DEFAULT_CATEGORY_LABEL);
-  }
-  return repairMojibakeCategoryLabel(found.label, key);
+  return found ? found.label : String(key || DEFAULT_CATEGORY_LABEL);
 }
 
 function getCategoryColorByKey(key, fallbackIndex = 0, definitions = state.categoryDefinitions) {
@@ -2300,38 +2167,7 @@ function buildCategoryLabelFromKey(key) {
   if (!normalizedKey) {
     return DEFAULT_CATEGORY_LABEL;
   }
-  const defaultDefinition = DEFAULT_CATEGORY_DEFINITIONS.find((item) => item.key === normalizedKey);
-  if (defaultDefinition && defaultDefinition.label) {
-    return defaultDefinition.label;
-  }
-  return `🧩 ${normalizedKey.replace(/[_-]+/g, " ")}`;
-}
-
-function repairMojibakeCategoryLabel(label, key) {
-  const normalizedLabel = String(label || "").trim();
-  if (!normalizedLabel) {
-    return normalizedLabel;
-  }
-
-  const compactLabel = normalizedLabel.replace(/\s+/g, "");
-  const decodedLabel = tryDecodeUtf8FromLatin1(normalizedLabel);
-  if (decodedLabel && !isLikelyMojibakeText(decodedLabel)) {
-    return normalizeCategoryLabel(decodedLabel, buildCategoryLabelFromKey(key));
-  }
-
-  const hasKnownBrokenPrefix = normalizedLabel.includes("棣冃");
-  const hasKnownBrokenGlyph = /[閺顖鍙鎳璺鐓锔烘偲鍋瞸馃课锟]/.test(normalizedLabel);
-  const hasReplacementChar = normalizedLabel.includes("�");
-  const looksLikeBrokenCustomLabel = /^(?:偲|馃|课).*\d+custom$/i.test(compactLabel) || /(?:偲|馃|课)\d+custom$/i.test(compactLabel);
-
-  if (hasKnownBrokenPrefix || hasKnownBrokenGlyph || hasReplacementChar || looksLikeBrokenCustomLabel || isLikelyMojibakeText(normalizedLabel)) {
-    if (looksLikeBrokenCustomLabel) {
-      return "日常";
-    }
-    return buildCategoryLabelFromKey(key);
-  }
-
-  return normalizedLabel;
+  return `馃З ${normalizedKey.replace(/[_-]+/g, " ")}`;
 }
 
 function loadCategoryDefinitions() {
@@ -2359,7 +2195,7 @@ function loadCategoryDefinitions() {
         usedKeys.add(key);
         return {
           key,
-          label: repairMojibakeCategoryLabel(normalizeCategoryLabel(item.label, buildCategoryLabelFromKey(key)), key),
+          label: normalizeCategoryLabel(item.label, buildCategoryLabelFromKey(key)),
           color: normalizeCategoryColor(item.color, PIE_COLORS[index % PIE_COLORS.length] || DEFAULT_CATEGORY_COLOR)
         };
       })
@@ -3143,7 +2979,7 @@ function normalizeTask(input) {
 
   return {
     id: String(input.id || createTaskId()),
-    name: repairPotentialMojibakeText(input.name, "", 50),
+    name: String(input.name || "").trim(),
     priority,
     importanceLevel: priority === "important_not_urgent" ? sanitizeImportanceLevel(input.importanceLevel) : "",
     urgentLevel: priority === "important_urgent" ? sanitizeUrgentLevel(input.urgentLevel) : "",
@@ -3153,7 +2989,7 @@ function normalizeTask(input) {
     processScore,
     optionalTagTouched,
     autoUrgentEscalation: input.autoUrgentEscalation === true,
-    detail: repairPotentialMojibakeText(input.detail, "", 200),
+    detail: String(input.detail || "").trim(),
     startAt,
     endAt,
     categories: categories.length ? categories : [getDefaultCategoryKey()],
@@ -3881,7 +3717,7 @@ function renderBedtimeReview() {
   if (totalRiskCount <= 0) {
     const weekEmpty = document.createElement("p");
     weekEmpty.className = "bedtime-review-empty";
-    weekEmpty.textContent = "本周入围任务为 0，已在各日板块中标注。";
+    weekEmpty.textContent = "\u672C\u5468\u5165\u56F4\u4EFB\u52A1\u4E3A 0\uff0c\u5DF2\u5728\u5404\u65E5\u677F\u5757\u4E2D\u6807\u6CE8\u3002";
     refs.bedtimeReviewGroups.appendChild(weekEmpty);
   }
 }
@@ -4508,7 +4344,7 @@ function renderTimeGroupsByStatus(column, status, groupedTasks) {
     if (!count) {
       const empty = document.createElement("div");
       empty.className = "empty-done-time-group";
-      empty.textContent = "暂无任务";
+      empty.textContent = "\u6682\u65E0\u4EFB\u52A1";
       list.appendChild(empty);
     } else {
       groupedTasks[group.key].forEach((task) => {
@@ -4892,7 +4728,7 @@ function renderWeekBars(categoryRanking) {
   if (!categoryRanking.length) {
     const empty = document.createElement("p");
     empty.className = "week-bars-empty";
-    empty.textContent = "本周暂无类别用时记录";
+    empty.textContent = "鏈懆鏆傛棤绫诲埆鐢ㄦ椂璁板綍";
     refs.weekBars.appendChild(empty);
     updateWeekBarsScrollState();
     return;
@@ -4931,7 +4767,7 @@ function renderWeekBars(categoryRanking) {
     item.appendChild(track);
     item.appendChild(hourText);
     item.appendChild(categoryLabel);
-    item.title = `${category.label} | 本周累计 ${formatDuration(category.minutes)} | 排名 #${index + 1}`;
+    item.title = `${category.label} | 鏈懆绱 ${formatDuration(category.minutes)} | 鎺掑悕 #${index + 1}`;
 
     refs.weekBars.appendChild(item);
   });
@@ -5390,7 +5226,6 @@ function normalizeDateInputValue(value) {
 function pad2(num) {
   return String(num).padStart(2, "0");
 }
-
 
 
 
