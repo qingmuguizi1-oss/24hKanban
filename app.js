@@ -3,8 +3,10 @@ const TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY = "time-efficiency-tasks-last-loc
 const TASK_FORM_DRAFT_STORAGE_KEY = "time-efficiency-task-form-draft-v1";
 const CATEGORY_DEFINITIONS_STORAGE_KEY = "time-efficiency-category-definitions-v1";
 const TASK_CATEGORY_SUBCATEGORY_CONFIG_STORAGE_KEY = "time-efficiency-task-category-subcategory-config-v1";
+const TASK_CATEGORY_SUBCATEGORY_CONFIG_LAST_LOCAL_MUTATION_AT_STORAGE_KEY = "time-efficiency-task-category-subcategory-config-last-local-mutation-at-v1";
 const CLOUD_IMPORT_MARKER_PREFIX = "time-efficiency-cloud-imported";
 const VOICE_EFFECTS_STORAGE_KEY = "time-efficiency-voice-effects-enabled";
+const TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 const CLOUDBASE_ENV_ID = "jieyou-3gr01mvob9ad92de";
 const CLOUDBASE_TASKS_COLLECTION = "time_efficiency_user_tasks";
@@ -193,6 +195,11 @@ const STATUS_COLUMNS = {
   doing: "col-doing",
   done: "col-done"
 };
+const STATUS_LABELS = {
+  todo: "未开始",
+  doing: "进行中",
+  done: "已完成"
+};
 
 const DONE_TIME_GROUPS = [
   { key: "morning", label: "\u4E0A\u5348" },
@@ -242,13 +249,17 @@ const state = {
   draggingCategoryKey: "",
   taskCategoryEditingGroupKey: "",
   taskSubcategorySelections: {},
+  taskCategoryAllocationInputs: {},
+  taskSubcategoryAllocationInputs: {},
   collapsedById: {},
   boardGroupCollapsed: Object.fromEntries(
     Object.keys(STATUS_COLUMNS).map((status) => [
       status,
       Object.fromEntries(DONE_TIME_GROUPS.map((group) => [group.key, true]))
     ])
-  )
+  ),
+  trashSelectionMode: false,
+  trashSelectedTaskIds: new Set()
 };
 
 const refs = {
@@ -275,6 +286,9 @@ const refs = {
   taskCategoryGroup: document.getElementById("task-category-group"),
   taskCategoryPicker: document.getElementById("task-category-picker"),
   taskCategorySummary: document.getElementById("task-category-summary"),
+  taskCategoryAllocationPanel: document.getElementById("task-category-allocation-panel"),
+  taskCategoryAllocationCaption: document.getElementById("task-category-allocation-caption"),
+  taskCategoryAllocationList: document.getElementById("task-category-allocation-list"),
   openCategoryManagerFormBtn: document.getElementById("open-category-manager-form"),
   categoryManagerModal: document.getElementById("category-manager-modal"),
   categoryManagerDialog: document.getElementById("category-manager-dialog"),
@@ -299,6 +313,16 @@ const refs = {
   taskCategorySummaryPanel: document.getElementById("task-category-page-summary"),
   taskCategoryCards: document.getElementById("task-category-page-cards"),
   taskCategoryBackBtn: document.getElementById("task-category-page-back-btn"),
+  trashPage: document.getElementById("trash-page"),
+  trashSummaryPanel: document.getElementById("trash-page-summary"),
+  trashList: document.getElementById("trash-page-list"),
+  trashFootnote: document.getElementById("trash-page-footnote"),
+  trashBackBtn: document.getElementById("trash-page-back-btn"),
+  trashSelectionToggleBtn: document.getElementById("trash-selection-toggle-btn"),
+  trashBatchBar: document.getElementById("trash-batch-bar"),
+  trashBatchCount: document.getElementById("trash-batch-count"),
+  trashBatchRestoreBtn: document.getElementById("trash-batch-restore-btn"),
+  trashBatchDeleteBtn: document.getElementById("trash-batch-delete-btn"),
   selectedDate: document.getElementById("selected-date"),
   selectedWeek: document.getElementById("selected-week"),
   modeDayBtn: document.getElementById("mode-day"),
@@ -336,6 +360,7 @@ const authRefs = {
   menuVoiceToggle: document.getElementById("menu-voice-toggle"),
   menuBedtimeReviewBtn: document.getElementById("menu-bedtime-review-btn"),
   menuTaskCategoryBtn: document.getElementById("menu-task-category-btn"),
+  menuTrashBtn: document.getElementById("menu-trash-btn"),
   menuAuthBtn: document.getElementById("menu-auth-btn"),
   menuAccountValue: document.getElementById("menu-account-value"),
   loginCloseBtn: document.getElementById("login-close-btn"),
@@ -394,6 +419,7 @@ function init() {
   state.categoryDefinitions = loadCategoryDefinitions();
   state.taskCategorySubcategoryConfig = loadTaskCategorySubcategoryConfig();
   state.tasks = loadTasks();
+  cleanupExpiredTrashTasks({ skipCloudSync: true });
   ensureCategoryDefinitionsForTasks(state.tasks);
   setVoiceEffectsEnabled(loadVoiceEffectsPreference(), { skipPersist: true });
   refs.selectedDate.value = state.selectedDate;
@@ -460,6 +486,26 @@ function init() {
   if (refs.taskCategoryBackBtn) {
     refs.taskCategoryBackBtn.addEventListener("click", () => {
       setActivePage("dashboard");
+    });
+  }
+  if (refs.trashBackBtn) {
+    refs.trashBackBtn.addEventListener("click", () => {
+      setActivePage("dashboard");
+    });
+  }
+  if (refs.trashSelectionToggleBtn) {
+    refs.trashSelectionToggleBtn.addEventListener("click", () => {
+      toggleTrashSelectionMode();
+    });
+  }
+  if (refs.trashBatchRestoreBtn) {
+    refs.trashBatchRestoreBtn.addEventListener("click", () => {
+      restoreSelectedTrashTasks();
+    });
+  }
+  if (refs.trashBatchDeleteBtn) {
+    refs.trashBatchDeleteBtn.addEventListener("click", () => {
+      permanentlyDeleteSelectedTrashTasks();
     });
   }
 
@@ -879,6 +925,11 @@ function bindGlobalMenuEvents() {
       handleOpenTaskCategoryFromMenu();
     });
   }
+  if (authRefs.menuTrashBtn) {
+    authRefs.menuTrashBtn.addEventListener("click", () => {
+      handleOpenTrashFromMenu();
+    });
+  }
   if (authRefs.menuVoiceToggle) {
     authRefs.menuVoiceToggle.addEventListener("change", (event) => {
       setVoiceEffectsEnabled(Boolean(event.target.checked));
@@ -910,6 +961,12 @@ function handleOpenTaskCategoryFromMenu() {
     refs.taskCategoryDate.value = state.taskCategoryDate;
   }
   setActivePage("task-category");
+}
+
+function handleOpenTrashFromMenu() {
+  closeGlobalMenu();
+  setTrashSelectionMode(false);
+  setActivePage("trash");
 }
 
 async function handleMenuAuthAction() {
@@ -1098,35 +1155,81 @@ async function bootstrapCloudTaskSync() {
 
   try {
     const localTasks = getNormalizedTaskList(state.tasks);
+    const localSubcategoryConfig = getNormalizedTaskCategorySubcategoryConfigSnapshot(state.taskCategorySubcategoryConfig);
     const cloudSnapshot = await pullTasksFromCloud();
     if (cloudSnapshot && Array.isArray(cloudSnapshot.tasks)) {
       const cloudTasks = cloudSnapshot.tasks;
       const hasMarker = hasCloudImportMarker(uid);
       const localMutationAt = getLocalTaskMutationAt();
+      const localSubcategoryConfigMutationAt = getLocalTaskCategorySubcategoryConfigMutationAt();
       const cloudUpdatedAt = getCloudSnapshotUpdatedAt(cloudSnapshot);
-      const shouldPreferLocalSnapshot = hasMarker && localMutationAt > 0 && localMutationAt > cloudUpdatedAt;
+      const shouldPreferLocalSnapshot = (
+        hasMarker
+        && localMutationAt > 0
+        && localMutationAt > cloudUpdatedAt
+      ) || (
+        !hasMarker
+        && localMutationAt > 0
+      );
+      const hasCloudSubcategoryConfig = Boolean(
+        cloudSnapshot.taskCategorySubcategoryConfig
+        && typeof cloudSnapshot.taskCategorySubcategoryConfig === "object"
+      );
+      const cloudSubcategoryConfig = hasCloudSubcategoryConfig
+        ? getNormalizedTaskCategorySubcategoryConfigSnapshot(cloudSnapshot.taskCategorySubcategoryConfig)
+        : localSubcategoryConfig;
+      const shouldPreferLocalSubcategoryConfig = (
+        hasMarker
+        && localSubcategoryConfigMutationAt > 0
+        && localSubcategoryConfigMutationAt > cloudUpdatedAt
+      ) || (
+        !hasMarker
+        && localSubcategoryConfigMutationAt > 0
+      );
+      const resolvedSubcategoryConfig = shouldPreferLocalSubcategoryConfig
+        ? localSubcategoryConfig
+        : cloudSubcategoryConfig;
       const mergedTasks = mergeTasksForCloudBootstrap(cloudTasks, localTasks);
       const hasLocalOnlyTasks = hasTasksNotInCloud(cloudTasks, localTasks);
-      const shouldUploadMerged = shouldPreferLocalSnapshot || hasLocalOnlyTasks || (!hasMarker && localTasks.length > 0);
+      let shouldUploadMergedTasks = shouldPreferLocalSnapshot || hasLocalOnlyTasks || (!hasMarker && localTasks.length > 0);
+      const shouldUploadMergedSubcategoryConfig = shouldPreferLocalSubcategoryConfig || !hasCloudSubcategoryConfig;
+      const shouldApplyCloudSubcategoryConfig = !shouldPreferLocalSubcategoryConfig
+        && !areTaskCategorySubcategoryConfigsEqual(state.taskCategorySubcategoryConfig, resolvedSubcategoryConfig);
 
       console.info("[cloud-sync] bootstrap task snapshot", {
         localCount: localTasks.length,
         cloudCount: cloudTasks.length,
         hasMarker,
         localMutationAt,
+        localSubcategoryConfigMutationAt,
         cloudUpdatedAt,
         shouldPreferLocalSnapshot,
+        shouldPreferLocalSubcategoryConfig,
         hasLocalOnlyTasks,
-        shouldUploadMerged
+        hasCloudSubcategoryConfig,
+        shouldUploadMergedTasks,
+        shouldUploadMergedSubcategoryConfig
       });
 
       state.tasks = shouldPreferLocalSnapshot ? localTasks : mergedTasks;
+      const cleanedExpiredTrashCount = cleanupExpiredTrashTasks({ skipSave: true });
+      if (cleanedExpiredTrashCount > 0) {
+        shouldUploadMergedTasks = true;
+      }
+      const shouldUploadMerged = shouldUploadMergedTasks || shouldUploadMergedSubcategoryConfig;
       saveTasks({ skipCloudSync: true, skipLocalMutationStamp: true });
+      if (shouldApplyCloudSubcategoryConfig) {
+        state.taskCategorySubcategoryConfig = resolvedSubcategoryConfig;
+        saveTaskCategorySubcategoryConfig({ skipCloudSync: true, skipLocalMutationStamp: true });
+        if (cloudUpdatedAt > 0) {
+          setLocalTaskCategorySubcategoryConfigMutationAt(cloudUpdatedAt);
+        }
+      }
       renderAll();
 
       if (shouldUploadMerged) {
         const uploaded = await syncTasksToCloud({ immediate: true });
-        if (uploaded && state.tasks.length > 0) {
+        if (uploaded) {
           setCloudImportMarker(uid);
         }
       }
@@ -1134,7 +1237,7 @@ async function bootstrapCloudTaskSync() {
     }
 
     const uploaded = await syncTasksToCloud({ immediate: true });
-    if (uploaded && localTasks.length > 0) {
+    if (uploaded) {
       setCloudImportMarker(uid);
     }
   } catch (error) {
@@ -1161,6 +1264,27 @@ function getLocalTaskMutationAt() {
 function setLocalTaskMutationAt(timestamp = Date.now()) {
   try {
     localStorage.setItem(TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY, String(Math.max(0, Number(timestamp) || Date.now())));
+  } catch {
+    // ignore mutation timestamp persistence failures
+  }
+}
+
+function getLocalTaskCategorySubcategoryConfigMutationAt() {
+  try {
+    const raw = localStorage.getItem(TASK_CATEGORY_SUBCATEGORY_CONFIG_LAST_LOCAL_MUTATION_AT_STORAGE_KEY);
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setLocalTaskCategorySubcategoryConfigMutationAt(timestamp = Date.now()) {
+  try {
+    localStorage.setItem(
+      TASK_CATEGORY_SUBCATEGORY_CONFIG_LAST_LOCAL_MUTATION_AT_STORAGE_KEY,
+      String(Math.max(0, Number(timestamp) || Date.now()))
+    );
   } catch {
     // ignore mutation timestamp persistence failures
   }
@@ -1277,10 +1401,12 @@ async function pullTasksFromCloud() {
   }
 
   const firstDoc = docs[0] || null;
-  const tasks = firstDoc && Array.isArray(firstDoc.tasks) ? firstDoc.tasks : null;
-  if (!tasks) {
-    return null;
-  }
+  const tasks = firstDoc && Array.isArray(firstDoc.tasks) ? firstDoc.tasks : [];
+  const rawSubcategoryConfig = firstDoc
+    && firstDoc.taskCategorySubcategoryConfig
+    && typeof firstDoc.taskCategorySubcategoryConfig === "object"
+    ? firstDoc.taskCategorySubcategoryConfig
+    : null;
 
   if (ensureCategoryDefinitionsForRawTasks(tasks)) {
     renderCategoryChecklist();
@@ -1290,6 +1416,9 @@ async function pullTasksFromCloud() {
     tasks: tasks
       .map(normalizeTask)
       .filter(Boolean),
+    taskCategorySubcategoryConfig: rawSubcategoryConfig
+      ? getNormalizedTaskCategorySubcategoryConfigSnapshot(rawSubcategoryConfig)
+      : null,
     updatedAt: firstDoc && Number.isFinite(Number(firstDoc.updatedAt)) ? Number(firstDoc.updatedAt) : 0
   };
 }
@@ -1325,10 +1454,14 @@ async function syncTasksToCloud(options = {}) {
     const tasks = state.tasks
       .map(normalizeTask)
       .filter(Boolean);
+    const taskCategorySubcategoryConfig = getNormalizedTaskCategorySubcategoryConfigSnapshot(
+      state.taskCategorySubcategoryConfig
+    );
     const payload = {
       uid,
       email: authState.user.email || "",
       tasks,
+      taskCategorySubcategoryConfig,
       updatedAt: Date.now()
     };
 
@@ -1363,7 +1496,7 @@ function buildCloudSyncFailureHint(error) {
     return "";
   }
 
-  return `CloudBase 鍙兘鍙戠敓璺ㄥ煙鎷︽埅锛岃鍦ㄤ簯寮€鍙戞帶鍒跺彴灏嗗綋鍓嶅煙鍚嶅姞鍏?Web 瀹夊叏鍩熷悕锛?{window.location.origin}`;
+  return `CloudBase 可能发生跨域拦截，请在云开发控制台将当前域名加入 Web 安全域名：${window.location.origin}`;
 }
 
 function getUpdatedCountFromUpdateResult(result) {
@@ -1444,10 +1577,13 @@ function showMainApp() {
 }
 
 function setActivePage(page) {
-  if (page === "bedtime-review" || page === "task-category") {
+  if (page === "bedtime-review" || page === "task-category" || page === "trash") {
     state.activePage = page;
   } else {
     state.activePage = "dashboard";
+  }
+  if (state.activePage !== "trash") {
+    setTrashSelectionMode(false);
   }
   updateActivePageView();
 }
@@ -1456,6 +1592,7 @@ function updateActivePageView() {
   const showDashboard = state.activePage === "dashboard";
   const showBedtimeReview = state.activePage === "bedtime-review";
   const showTaskCategory = state.activePage === "task-category";
+  const showTrash = state.activePage === "trash";
   if (authRefs.mainApp) {
     authRefs.mainApp.classList.toggle("is-hidden", !showDashboard);
     authRefs.mainApp.setAttribute("aria-hidden", showDashboard ? "false" : "true");
@@ -1468,17 +1605,27 @@ function updateActivePageView() {
     refs.taskCategoryPage.classList.toggle("is-hidden", !showTaskCategory);
     refs.taskCategoryPage.setAttribute("aria-hidden", showTaskCategory ? "false" : "true");
   }
+  if (refs.trashPage) {
+    refs.trashPage.classList.toggle("is-hidden", !showTrash);
+    refs.trashPage.setAttribute("aria-hidden", showTrash ? "false" : "true");
+  }
   if (authRefs.menuBedtimeReviewBtn) {
     authRefs.menuBedtimeReviewBtn.classList.toggle("is-active", showBedtimeReview);
   }
   if (authRefs.menuTaskCategoryBtn) {
     authRefs.menuTaskCategoryBtn.classList.toggle("is-active", showTaskCategory);
   }
+  if (authRefs.menuTrashBtn) {
+    authRefs.menuTrashBtn.classList.toggle("is-active", showTrash);
+  }
   if (showBedtimeReview) {
     renderBedtimeReview();
   }
   if (showTaskCategory) {
     renderTaskCategoryPage();
+  }
+  if (showTrash) {
+    renderTrashPage();
   }
 }
 
@@ -2005,9 +2152,20 @@ function restoreTaskFormDraft() {
     refs.taskEnd.value = normalizeDateTimeInput(draft.endAt || "");
   }
 
-  setSelectedTaskSubcategoriesToForm(draft.subcategories, draft.categories);
-  setSelectedCategoriesToForm(Array.isArray(draft.categories) ? draft.categories : []);
+  const draftCategories = Array.isArray(draft.categories) ? draft.categories : [];
+  setSelectedCategoriesToForm(draftCategories);
+  setTaskCategoryAllocationInputsToForm(
+    draft.categoryAllocationInputs || draft.categoryAllocations,
+    draftCategories
+  );
+  setSelectedTaskSubcategoriesToForm(draft.subcategories, draftCategories);
+  setTaskSubcategoryAllocationInputsToForm(
+    draft.subcategoryAllocationInputs || draft.subcategoryAllocations,
+    draft.subcategories,
+    draftCategories
+  );
   refs.taskStatus.value = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, draft.status) ? draft.status : "todo";
+  renderCategorySummary();
   updateDetailCount();
   updateDurationPreview();
 }
@@ -2027,6 +2185,8 @@ function loadTaskFormDraft() {
 
 function persistTaskFormDraft() {
   try {
+    const categories = getSelectedCategoriesFromForm();
+    const subcategories = getSelectedTaskSubcategoriesFromForm();
     const draft = {
       taskId: refs.taskId.value || "",
       name: refs.taskName.value || "",
@@ -2041,8 +2201,17 @@ function persistTaskFormDraft() {
       detail: refs.taskDetail.value || "",
       startAt: refs.taskStart ? normalizeDateTimeInput(refs.taskStart.value) : "",
       endAt: refs.taskEnd ? normalizeDateTimeInput(refs.taskEnd.value) : "",
-      categories: getSelectedCategoriesFromForm(),
-      subcategories: getSelectedTaskSubcategoriesFromForm(),
+      categories,
+      subcategories,
+      categoryAllocationInputs: sanitizeTaskCategoryAllocationInputs(
+        state.taskCategoryAllocationInputs,
+        categories
+      ),
+      subcategoryAllocationInputs: sanitizeTaskSubcategoryAllocationInputs(
+        state.taskSubcategoryAllocationInputs,
+        subcategories,
+        categories
+      ),
       status: refs.taskStatus.value
     };
 
@@ -2093,6 +2262,142 @@ function getTaskRange(task) {
     return null;
   }
   return { start, end };
+}
+
+function normalizeMinutesInputValue(value) {
+  if (value === "" || value === null || typeof value === "undefined") {
+    return null;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return null;
+  }
+  return Math.round(numeric);
+}
+
+function buildEvenMinuteAllocation(keys, totalMinutes) {
+  const normalizedKeys = Array.isArray(keys) ? keys.filter(Boolean) : [];
+  const total = Math.max(0, Math.round(totalMinutes));
+  if (!normalizedKeys.length) {
+    return {};
+  }
+  if (total <= 0) {
+    return Object.fromEntries(normalizedKeys.map((key) => [key, 0]));
+  }
+
+  const base = Math.floor(total / normalizedKeys.length);
+  let remainder = total - base * normalizedKeys.length;
+  const allocation = {};
+  normalizedKeys.forEach((key) => {
+    const bonus = remainder > 0 ? 1 : 0;
+    allocation[key] = base + bonus;
+    remainder -= bonus;
+  });
+  return allocation;
+}
+
+function normalizeMinuteAllocationMap(rawAllocations, keys, totalMinutes) {
+  const normalizedKeys = Array.isArray(keys)
+    ? keys.filter((key, index, list) => key && list.indexOf(key) === index)
+    : [];
+  const total = Math.max(0, Math.round(totalMinutes));
+  if (!normalizedKeys.length) {
+    return {};
+  }
+
+  const source = rawAllocations && typeof rawAllocations === "object" ? rawAllocations : {};
+  const parsedValues = {};
+  let sum = 0;
+
+  normalizedKeys.forEach((key) => {
+    const parsed = normalizeMinutesInputValue(source[key]);
+    const minutes = parsed === null ? 0 : parsed;
+    parsedValues[key] = minutes;
+    sum += minutes;
+  });
+
+  if (total <= 0) {
+    return Object.fromEntries(normalizedKeys.map((key) => [key, 0]));
+  }
+
+  if (sum <= 0) {
+    return buildEvenMinuteAllocation(normalizedKeys, total);
+  }
+
+  if (sum === total) {
+    return parsedValues;
+  }
+
+  const scaled = normalizedKeys.map((key, index) => {
+    const raw = parsedValues[key];
+    const exact = (raw / sum) * total;
+    const floor = Math.floor(exact);
+    return {
+      key,
+      index,
+      floor,
+      fraction: exact - floor
+    };
+  });
+
+  let floorSum = scaled.reduce((acc, item) => acc + item.floor, 0);
+  let remainder = total - floorSum;
+  scaled.sort((left, right) => {
+    if (right.fraction !== left.fraction) {
+      return right.fraction - left.fraction;
+    }
+    return left.index - right.index;
+  });
+
+  const result = Object.fromEntries(scaled.map((item) => [item.key, item.floor]));
+  let cursor = 0;
+  while (remainder > 0 && scaled.length) {
+    const item = scaled[cursor % scaled.length];
+    result[item.key] += 1;
+    remainder -= 1;
+    cursor += 1;
+  }
+  return result;
+}
+
+function getTaskDurationMinutes(task) {
+  if (!task || typeof task !== "object") {
+    return 0;
+  }
+  return getDurationMinutes(task.startAt, task.endAt);
+}
+
+function sanitizeTaskCategoryAllocations(categoryAllocations, categoryKeys, totalMinutes) {
+  const keys = sanitizeCategoryKeys(categoryKeys);
+  return normalizeMinuteAllocationMap(categoryAllocations, keys, totalMinutes);
+}
+
+function sanitizeTaskSubcategoryAllocations(
+  subcategoryAllocations,
+  subcategorySelections,
+  categoryKeys,
+  categoryAllocations
+) {
+  const normalizedCategoryKeys = sanitizeCategoryKeys(categoryKeys);
+  const normalizedSelections = sanitizeTaskSubcategorySelections(subcategorySelections, normalizedCategoryKeys);
+  const source = subcategoryAllocations && typeof subcategoryAllocations === "object" ? subcategoryAllocations : {};
+  const normalized = {};
+
+  normalizedCategoryKeys.forEach((groupKey) => {
+    const selectedSubcategories = Array.isArray(normalizedSelections[groupKey]) ? normalizedSelections[groupKey] : [];
+    if (!selectedSubcategories.length) {
+      return;
+    }
+    const rawGroupAllocations = source[groupKey] && typeof source[groupKey] === "object"
+      ? source[groupKey]
+      : {};
+    const groupTotal = categoryAllocations && Number.isFinite(categoryAllocations[groupKey])
+      ? categoryAllocations[groupKey]
+      : 0;
+    normalized[groupKey] = normalizeMinuteAllocationMap(rawGroupAllocations, selectedSubcategories, groupTotal);
+  });
+
+  return normalized;
 }
 
 function createDefaultCategoryDefinitions() {
@@ -2167,7 +2472,7 @@ function buildCategoryLabelFromKey(key) {
   if (!normalizedKey) {
     return DEFAULT_CATEGORY_LABEL;
   }
-  return `馃З ${normalizedKey.replace(/[_-]+/g, " ")}`;
+  return `🧩 ${normalizedKey.replace(/[_-]+/g, " ")}`;
 }
 
 function loadCategoryDefinitions() {
@@ -2309,13 +2614,32 @@ function renderCategoryChecklist() {
     refs.taskCategoryGroup.appendChild(item);
   });
 
+  state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
+    state.taskCategoryAllocationInputs,
+    Array.from(previousSelected)
+  );
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    Array.from(previousSelected)
+  );
   renderCategorySummary();
 }
 
 function handleCategoryInputChanged() {
+  const selectedCategories = getSelectedCategoriesFromForm();
   state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(
     state.taskSubcategorySelections,
-    getSelectedCategoriesFromForm()
+    selectedCategories
+  );
+  state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
+    state.taskCategoryAllocationInputs,
+    selectedCategories
+  );
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    selectedCategories
   );
   renderCategorySummary();
   persistTaskFormDraft();
@@ -2340,7 +2664,406 @@ function setSelectedCategoriesToForm(categoryKeys) {
     state.taskSubcategorySelections,
     Array.from(selected)
   );
+  state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
+    state.taskCategoryAllocationInputs,
+    Array.from(selected)
+  );
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    Array.from(selected)
+  );
   renderCategorySummary();
+}
+
+function sanitizeTaskCategoryAllocationInputs(allocationInputs, categoryKeys = getSelectedCategoriesFromForm()) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  const source = allocationInputs && typeof allocationInputs === "object" ? allocationInputs : {};
+  const next = {};
+
+  selected.forEach((key) => {
+    const parsed = normalizeMinutesInputValue(source[key]);
+    if (parsed !== null) {
+      next[key] = String(parsed);
+    }
+  });
+
+  return next;
+}
+
+function sanitizeTaskSubcategoryAllocationInputs(
+  allocationInputs,
+  subcategorySelections = state.taskSubcategorySelections,
+  categoryKeys = getSelectedCategoriesFromForm()
+) {
+  const selectedCategories = sanitizeCategoryKeys(categoryKeys);
+  const selectedSubcategories = sanitizeTaskSubcategorySelections(subcategorySelections, selectedCategories);
+  const source = allocationInputs && typeof allocationInputs === "object" ? allocationInputs : {};
+  const next = {};
+
+  selectedCategories.forEach((groupKey) => {
+    const groupSubcategories = Array.isArray(selectedSubcategories[groupKey]) ? selectedSubcategories[groupKey] : [];
+    if (!groupSubcategories.length) {
+      return;
+    }
+    const sourceGroup = source[groupKey] && typeof source[groupKey] === "object" ? source[groupKey] : {};
+    const groupValues = {};
+    groupSubcategories.forEach((subcategoryKey) => {
+      const parsed = normalizeMinutesInputValue(sourceGroup[subcategoryKey]);
+      if (parsed !== null) {
+        groupValues[subcategoryKey] = String(parsed);
+      }
+    });
+    next[groupKey] = groupValues;
+  });
+
+  return next;
+}
+
+function getTaskDurationMinutesFromForm() {
+  if (!refs.taskStart || !refs.taskEnd) {
+    return 0;
+  }
+  return Math.max(0, getDurationMinutes(refs.taskStart.value, refs.taskEnd.value));
+}
+
+function ensureCategoryAllocationInputDefaults(selectedKeys, totalMinutes) {
+  const keys = sanitizeCategoryKeys(selectedKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(state.taskCategoryAllocationInputs, keys);
+
+  if (!keys.length) {
+    return;
+  }
+
+  if (keys.length === 1) {
+    state.taskCategoryAllocationInputs[keys[0]] = String(total);
+    return;
+  }
+
+  const hasAnyValue = keys.some((key) => normalizeMinutesInputValue(state.taskCategoryAllocationInputs[key]) !== null);
+  if (!hasAnyValue) {
+    const even = buildEvenMinuteAllocation(keys, total);
+    keys.forEach((key) => {
+      state.taskCategoryAllocationInputs[key] = String(even[key] || 0);
+    });
+    return;
+  }
+
+  keys.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(state.taskCategoryAllocationInputs, key)) {
+      state.taskCategoryAllocationInputs[key] = "0";
+    }
+  });
+}
+
+function ensureSubcategoryAllocationInputDefaults(groupKey, selectedSubcategoryKeys, groupTotalMinutes) {
+  const subcategoryKeys = Array.isArray(selectedSubcategoryKeys)
+    ? selectedSubcategoryKeys.filter((key, index, list) => key && list.indexOf(key) === index)
+    : [];
+  const total = Math.max(0, Math.round(groupTotalMinutes));
+
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    getSelectedCategoriesFromForm()
+  );
+
+  if (!Object.prototype.hasOwnProperty.call(state.taskSubcategoryAllocationInputs, groupKey)) {
+    state.taskSubcategoryAllocationInputs[groupKey] = {};
+  }
+
+  const groupValues = state.taskSubcategoryAllocationInputs[groupKey];
+  Object.keys(groupValues).forEach((key) => {
+    if (!subcategoryKeys.includes(key)) {
+      delete groupValues[key];
+    }
+  });
+
+  if (!subcategoryKeys.length) {
+    return;
+  }
+
+  if (subcategoryKeys.length === 1) {
+    groupValues[subcategoryKeys[0]] = String(total);
+    return;
+  }
+
+  const hasAnyValue = subcategoryKeys.some((key) => normalizeMinutesInputValue(groupValues[key]) !== null);
+  if (!hasAnyValue) {
+    const even = buildEvenMinuteAllocation(subcategoryKeys, total);
+    subcategoryKeys.forEach((key) => {
+      groupValues[key] = String(even[key] || 0);
+    });
+    return;
+  }
+
+  subcategoryKeys.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(groupValues, key)) {
+      groupValues[key] = "0";
+    }
+  });
+}
+
+function getCategoryAllocationDraftForForm(
+  selectedKeys = getSelectedCategoriesFromForm(),
+  totalMinutes = getTaskDurationMinutesFromForm()
+) {
+  const keys = sanitizeCategoryKeys(selectedKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  if (!keys.length) {
+    return {
+      allocations: {},
+      total,
+      sum: 0,
+      remaining: total,
+      isValid: total === 0
+    };
+  }
+
+  ensureCategoryAllocationInputDefaults(keys, total);
+  const allocations = {};
+  let sum = 0;
+
+  if (keys.length === 1) {
+    allocations[keys[0]] = total;
+    return {
+      allocations,
+      total,
+      sum: total,
+      remaining: 0,
+      isValid: true
+    };
+  }
+
+  keys.forEach((key) => {
+    const parsed = normalizeMinutesInputValue(state.taskCategoryAllocationInputs[key]);
+    const minutes = parsed === null ? 0 : parsed;
+    allocations[key] = minutes;
+    sum += minutes;
+  });
+
+  return {
+    allocations,
+    total,
+    sum,
+    remaining: total - sum,
+    isValid: sum === total
+  };
+}
+
+function getSubcategoryAllocationDraftForForm(groupKey, selectedSubcategoryKeys, groupTotalMinutes) {
+  const subcategoryKeys = Array.isArray(selectedSubcategoryKeys)
+    ? selectedSubcategoryKeys.filter((key, index, list) => key && list.indexOf(key) === index)
+    : [];
+  const total = Math.max(0, Math.round(groupTotalMinutes));
+  ensureSubcategoryAllocationInputDefaults(groupKey, subcategoryKeys, total);
+
+  const allocations = {};
+  if (!subcategoryKeys.length) {
+    return {
+      allocations,
+      total,
+      sum: 0,
+      remaining: total,
+      isValid: total === 0
+    };
+  }
+
+  if (subcategoryKeys.length === 1) {
+    allocations[subcategoryKeys[0]] = total;
+    return {
+      allocations,
+      total,
+      sum: total,
+      remaining: 0,
+      isValid: true
+    };
+  }
+
+  let sum = 0;
+  const groupValues = state.taskSubcategoryAllocationInputs[groupKey] || {};
+  subcategoryKeys.forEach((key) => {
+    const parsed = normalizeMinutesInputValue(groupValues[key]);
+    const minutes = parsed === null ? 0 : parsed;
+    allocations[key] = minutes;
+    sum += minutes;
+  });
+
+  return {
+    allocations,
+    total,
+    sum,
+    remaining: total - sum,
+    isValid: sum === total
+  };
+}
+
+function applyAllocationCaptionStatusClass(element, status) {
+  if (!element || !element.classList) {
+    return;
+  }
+  element.classList.remove("is-ok", "is-warn", "is-error");
+  if (status === "ok" || status === "warn" || status === "error") {
+    element.classList.add(`is-${status}`);
+  }
+}
+
+function updateTaskCategoryAllocationCaption(keys, draft) {
+  if (!refs.taskCategoryAllocationCaption) {
+    return;
+  }
+  if (!keys.length) {
+    refs.taskCategoryAllocationCaption.textContent = "多选时请填写各类别分配分钟数";
+    applyAllocationCaptionStatusClass(refs.taskCategoryAllocationCaption, "");
+    return;
+  }
+  if (keys.length === 1) {
+    refs.taskCategoryAllocationCaption.textContent = `单选已自动分配：${formatDuration(draft.total)}`;
+    applyAllocationCaptionStatusClass(refs.taskCategoryAllocationCaption, "ok");
+    return;
+  }
+  if (draft.remaining === 0) {
+    refs.taskCategoryAllocationCaption.textContent = `已分配 ${formatDuration(draft.sum)}，与总时长一致`;
+    applyAllocationCaptionStatusClass(refs.taskCategoryAllocationCaption, "ok");
+    return;
+  }
+  if (draft.remaining > 0) {
+    refs.taskCategoryAllocationCaption.textContent = `还需分配 ${formatDuration(draft.remaining)}（总时长 ${formatDuration(draft.total)}）`;
+    applyAllocationCaptionStatusClass(refs.taskCategoryAllocationCaption, "warn");
+    return;
+  }
+  refs.taskCategoryAllocationCaption.textContent = `超出 ${formatDuration(Math.abs(draft.remaining))}，请调整到 ${formatDuration(draft.total)}`;
+  applyAllocationCaptionStatusClass(refs.taskCategoryAllocationCaption, "error");
+}
+
+function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesFromForm()) {
+  if (!refs.taskCategoryAllocationPanel || !refs.taskCategoryAllocationList || !refs.taskCategoryAllocationCaption) {
+    return;
+  }
+
+  const keys = sanitizeCategoryKeys(selectedKeys);
+  const totalMinutes = getTaskDurationMinutesFromForm();
+  refs.taskCategoryAllocationList.innerHTML = "";
+
+  if (!keys.length) {
+    refs.taskCategoryAllocationPanel.classList.add("is-hidden");
+    updateTaskCategoryAllocationCaption([], {
+      total: 0,
+      sum: 0,
+      remaining: 0
+    });
+    return;
+  }
+
+  const draft = getCategoryAllocationDraftForForm(keys, totalMinutes);
+  refs.taskCategoryAllocationPanel.classList.remove("is-hidden");
+  updateTaskCategoryAllocationCaption(keys, draft);
+
+  keys.forEach((key, index) => {
+    const row = document.createElement("div");
+    row.className = "task-category-allocation-item";
+
+    const name = document.createElement("span");
+    name.className = "task-category-allocation-name";
+    const dot = document.createElement("i");
+    dot.style.background = getCategoryColorByKey(key, index);
+    const label = document.createElement("span");
+    label.textContent = getCategoryLabelByKey(key);
+    name.appendChild(dot);
+    name.appendChild(label);
+
+    const inputWrap = document.createElement("span");
+    inputWrap.className = "task-category-allocation-input-wrap";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "1";
+    input.inputMode = "numeric";
+    input.value = String(draft.allocations[key] || 0);
+    input.disabled = keys.length === 1;
+    input.addEventListener("input", (event) => {
+      state.taskCategoryAllocationInputs[key] = event.target.value;
+      updateTaskCategoryAllocationCaption(keys, getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()));
+      renderTaskSubcategoryPanel(keys);
+      persistTaskFormDraft();
+    });
+
+    const unit = document.createElement("span");
+    unit.textContent = "m";
+
+    inputWrap.appendChild(input);
+    inputWrap.appendChild(unit);
+
+    row.appendChild(name);
+    row.appendChild(inputWrap);
+    refs.taskCategoryAllocationList.appendChild(row);
+  });
+}
+
+function setTaskCategoryAllocationInputsToForm(allocationInputs, categoryKeys = getSelectedCategoriesFromForm()) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(allocationInputs, selected);
+  ensureCategoryAllocationInputDefaults(selected, getTaskDurationMinutesFromForm());
+}
+
+function setTaskSubcategoryAllocationInputsToForm(
+  allocationInputs,
+  subcategorySelections = state.taskSubcategorySelections,
+  categoryKeys = getSelectedCategoriesFromForm()
+) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    allocationInputs,
+    subcategorySelections,
+    selected
+  );
+}
+
+function getTaskCategoryAllocationsForSubmit(categoryKeys, totalMinutes) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  const draft = getCategoryAllocationDraftForForm(selected, total);
+  if (selected.length > 1 && !draft.isValid) {
+    return {
+      allocations: null,
+      message: `大类分配需等于总时长（当前总时长 ${formatDuration(draft.total)}，已分配 ${formatDuration(draft.sum)}）。`
+    };
+  }
+  return {
+    allocations: normalizeMinuteAllocationMap(draft.allocations, selected, total),
+    message: ""
+  };
+}
+
+function getTaskSubcategoryAllocationsForSubmit(subcategorySelections, categoryAllocations) {
+  const selections = sanitizeTaskSubcategorySelections(subcategorySelections, Object.keys(categoryAllocations || {}));
+  const result = {};
+
+  for (const [groupKey, subcategoryKeys] of Object.entries(selections)) {
+    const keys = Array.isArray(subcategoryKeys) ? subcategoryKeys : [];
+    if (!keys.length) {
+      continue;
+    }
+
+    const groupTotal = categoryAllocations && Number.isFinite(categoryAllocations[groupKey])
+      ? categoryAllocations[groupKey]
+      : 0;
+    const draft = getSubcategoryAllocationDraftForForm(groupKey, keys, groupTotal);
+    if (keys.length > 1 && !draft.isValid) {
+      return {
+        allocations: null,
+        message: `${getCategoryLabelByKey(groupKey)} 的小类分配需等于该大类时长（当前 ${formatDuration(draft.total)}，已分配 ${formatDuration(draft.sum)}）。`
+      };
+    }
+
+    result[groupKey] = normalizeMinuteAllocationMap(draft.allocations, keys, groupTotal);
+  }
+
+  return {
+    allocations: result,
+    message: ""
+  };
 }
 
 function getSelectedTaskSubcategoriesFromForm() {
@@ -2352,10 +3075,16 @@ function getSelectedTaskSubcategoriesFromForm() {
 
 function setSelectedTaskSubcategoriesToForm(subcategorySelections, categoryKeys = getSelectedCategoriesFromForm()) {
   state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(subcategorySelections, categoryKeys);
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    categoryKeys
+  );
 }
 
 function renderCategorySummary() {
   const selected = getSelectedCategoriesFromForm();
+  renderTaskCategoryAllocationPanel(selected);
   renderTaskSubcategoryPanel(selected);
   if (!refs.taskCategorySummary) {
     return;
@@ -2376,17 +3105,22 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
     return;
   }
 
+  const normalizedSelectedKeys = sanitizeCategoryKeys(selectedKeys);
   const isCategoryPickerOpen = !refs.taskCategoryPicker || refs.taskCategoryPicker.open;
   const groupMap = new Map(getTaskCategoryGroups().map((group) => [group.key, group]));
-  const groups = selectedKeys
+  const groups = normalizedSelectedKeys
     .map((key) => groupMap.get(key))
     .filter(Boolean);
+  const categoryDraft = getCategoryAllocationDraftForForm(
+    normalizedSelectedKeys,
+    getTaskDurationMinutesFromForm()
+  );
 
   refs.taskSubcategoryPanel.classList.toggle("is-hidden", groups.length === 0 || !isCategoryPickerOpen);
   refs.taskSubcategoryGroups.innerHTML = "";
 
   if (!groups.length) {
-    refs.taskSubcategoryCaption.textContent = "选择上方 5 大类后显示";
+    refs.taskSubcategoryCaption.textContent = "选择上方大类后显示";
     return;
   }
 
@@ -2432,8 +3166,92 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
       chipWrap.appendChild(chip);
     });
 
+    const groupTotalMinutes = categoryDraft.allocations[group.key] || 0;
+    const selectedSubcategorySet = new Set(selectedSubcategories);
+    const selectedSubcategoryOptions = group.subcategories.filter((item) => selectedSubcategorySet.has(item.key));
+    const subcategoryDraft = getSubcategoryAllocationDraftForForm(
+      group.key,
+      selectedSubcategoryOptions.map((item) => item.key),
+      groupTotalMinutes
+    );
+
     section.appendChild(heading);
     section.appendChild(chipWrap);
+
+    if (selectedSubcategoryOptions.length > 0) {
+      const allocationWrap = document.createElement("div");
+      allocationWrap.className = "task-subcategory-allocation";
+
+      const caption = document.createElement("p");
+      caption.className = "task-subcategory-allocation-caption";
+      const updateCaption = () => {
+        const latestDraft = getSubcategoryAllocationDraftForForm(
+          group.key,
+          selectedSubcategoryOptions.map((item) => item.key),
+          categoryDraft.allocations[group.key] || 0
+        );
+
+        if (selectedSubcategoryOptions.length === 1) {
+          caption.textContent = `单个小类自动分配 ${formatDuration(latestDraft.total)}`;
+          applyAllocationCaptionStatusClass(caption, "ok");
+          return;
+        }
+        if (latestDraft.remaining === 0) {
+          caption.textContent = `小类已分配完成：${formatDuration(latestDraft.sum)} / ${formatDuration(latestDraft.total)}`;
+          applyAllocationCaptionStatusClass(caption, "ok");
+          return;
+        }
+        if (latestDraft.remaining > 0) {
+          caption.textContent = `小类还需分配 ${formatDuration(latestDraft.remaining)}（大类总额 ${formatDuration(latestDraft.total)}）`;
+          applyAllocationCaptionStatusClass(caption, "warn");
+          return;
+        }
+        caption.textContent = `小类超出 ${formatDuration(Math.abs(latestDraft.remaining))}，请调回 ${formatDuration(latestDraft.total)}`;
+        applyAllocationCaptionStatusClass(caption, "error");
+      };
+      updateCaption();
+      allocationWrap.appendChild(caption);
+
+      if (selectedSubcategoryOptions.length > 1) {
+        selectedSubcategoryOptions.forEach((option) => {
+          const row = document.createElement("div");
+          row.className = "task-subcategory-allocation-row";
+
+          const label = document.createElement("label");
+          label.textContent = option.label;
+
+          const inputWrap = document.createElement("span");
+          inputWrap.className = "task-category-allocation-input-wrap";
+
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.step = "1";
+          input.inputMode = "numeric";
+          input.value = String(subcategoryDraft.allocations[option.key] || 0);
+          input.addEventListener("input", (event) => {
+            if (!Object.prototype.hasOwnProperty.call(state.taskSubcategoryAllocationInputs, group.key)) {
+              state.taskSubcategoryAllocationInputs[group.key] = {};
+            }
+            state.taskSubcategoryAllocationInputs[group.key][option.key] = event.target.value;
+            updateCaption();
+            persistTaskFormDraft();
+          });
+
+          const unit = document.createElement("span");
+          unit.textContent = "m";
+
+          inputWrap.appendChild(input);
+          inputWrap.appendChild(unit);
+          row.appendChild(label);
+          row.appendChild(inputWrap);
+          allocationWrap.appendChild(row);
+        });
+      }
+
+      section.appendChild(allocationWrap);
+    }
+
     refs.taskSubcategoryGroups.appendChild(section);
   });
 }
@@ -2503,41 +3321,61 @@ function normalizeTaskCategorySubcategoryConfig(groupKey, subcategories, fallbac
 }
 
 function loadTaskCategorySubcategoryConfig() {
-  const fallback = createDefaultTaskCategorySubcategoryConfig();
   try {
     const raw = localStorage.getItem(TASK_CATEGORY_SUBCATEGORY_CONFIG_STORAGE_KEY);
     if (!raw) {
-      return fallback;
+      return createDefaultTaskCategorySubcategoryConfig();
     }
 
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
-      return fallback;
+      return createDefaultTaskCategorySubcategoryConfig();
     }
 
-    const normalized = {};
-    TASK_CATEGORY_GROUPS.forEach((group) => {
-      normalized[group.key] = normalizeTaskCategorySubcategoryConfig(
-        group.key,
-        parsed[group.key],
-        fallback[group.key]
-      );
-    });
-    return normalized;
+    return getNormalizedTaskCategorySubcategoryConfigSnapshot(parsed);
   } catch {
-    return fallback;
+    return createDefaultTaskCategorySubcategoryConfig();
   }
 }
 
-function saveTaskCategorySubcategoryConfig() {
+function saveTaskCategorySubcategoryConfig(options = {}) {
   try {
     localStorage.setItem(
       TASK_CATEGORY_SUBCATEGORY_CONFIG_STORAGE_KEY,
-      JSON.stringify(state.taskCategorySubcategoryConfig)
+      JSON.stringify(getNormalizedTaskCategorySubcategoryConfigSnapshot(state.taskCategorySubcategoryConfig))
     );
   } catch {
     // ignore task category config persistence failures
   }
+
+  if (!options.skipLocalMutationStamp) {
+    setLocalTaskCategorySubcategoryConfigMutationAt();
+  }
+  if (options.skipCloudSync) {
+    return;
+  }
+  scheduleCloudTaskSync();
+}
+
+function getNormalizedTaskCategorySubcategoryConfigSnapshot(inputConfig) {
+  const fallback = createDefaultTaskCategorySubcategoryConfig();
+  const source = inputConfig && typeof inputConfig === "object" ? inputConfig : {};
+  const normalized = {};
+
+  TASK_CATEGORY_GROUPS.forEach((group) => {
+    normalized[group.key] = normalizeTaskCategorySubcategoryConfig(
+      group.key,
+      source[group.key],
+      fallback[group.key]
+    );
+  });
+
+  return normalized;
+}
+
+function areTaskCategorySubcategoryConfigsEqual(leftConfig, rightConfig) {
+  return JSON.stringify(getNormalizedTaskCategorySubcategoryConfigSnapshot(leftConfig))
+    === JSON.stringify(getNormalizedTaskCategorySubcategoryConfigSnapshot(rightConfig));
 }
 
 function getTaskCategorySubcategoriesConfigByGroupKey(groupKey) {
@@ -2709,7 +3547,7 @@ function renderCategoryManager() {
     colorInput.type = "color";
     colorInput.className = "category-manager-color";
     colorInput.value = normalizeCategoryColor(definition.color, DEFAULT_CATEGORY_COLOR);
-    colorInput.title = "类别颜色";
+    colorInput.title = "绫诲埆棰滆壊";
     colorInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { color: colorInput.value }, { skipManagerRerender: true });
     });
@@ -2719,7 +3557,7 @@ function renderCategoryManager() {
     nameInput.className = "category-manager-name";
     nameInput.maxLength = 24;
     nameInput.value = definition.label;
-    nameInput.placeholder = "类别名称";
+    nameInput.placeholder = "绫诲埆鍚嶇О";
     nameInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { label: nameInput.value }, { skipManagerRerender: true });
     });
@@ -2731,8 +3569,8 @@ function renderCategoryManager() {
     const dragHandle = document.createElement("button");
     dragHandle.type = "button";
     dragHandle.className = "category-manager-drag-handle";
-    dragHandle.textContent = "⋮⋮";
-    dragHandle.title = "拖拽排序";
+    dragHandle.textContent = "鈰嫯";
+    dragHandle.title = "鎷栨嫿鎺掑簭";
     dragHandle.setAttribute("draggable", "true");
     dragHandle.addEventListener("dragstart", (event) => {
       state.draggingCategoryKey = definition.key;
@@ -2755,7 +3593,7 @@ function renderCategoryManager() {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "danger category-manager-delete";
-    deleteBtn.textContent = "删除";
+    deleteBtn.textContent = "鍒犻櫎";
     deleteBtn.addEventListener("click", () => {
       deleteCategoryDefinition(definition.key);
     });
@@ -2903,13 +3741,33 @@ function deleteCategoryDefinition(targetKey) {
     if (!nextCategories.length) {
       nextCategories.push(fallbackKey);
     }
-    if (hasSameCategorySequence(currentCategories, nextCategories)) {
+    const nextSubcategories = sanitizeTaskSubcategorySelections(task.subcategories, nextCategories);
+    const durationMinutes = getTaskDurationMinutes(task);
+    const nextCategoryAllocations = sanitizeTaskCategoryAllocations(
+      task.categoryAllocations,
+      nextCategories,
+      durationMinutes
+    );
+    const nextSubcategoryAllocations = sanitizeTaskSubcategoryAllocations(
+      task.subcategoryAllocations,
+      nextSubcategories,
+      nextCategories,
+      nextCategoryAllocations
+    );
+    const categoriesUnchanged = hasSameCategorySequence(currentCategories, nextCategories);
+    const subcategoriesUnchanged = JSON.stringify(task.subcategories || {}) === JSON.stringify(nextSubcategories);
+    const categoryAllocationsUnchanged = JSON.stringify(task.categoryAllocations || {}) === JSON.stringify(nextCategoryAllocations);
+    const subcategoryAllocationsUnchanged = JSON.stringify(task.subcategoryAllocations || {}) === JSON.stringify(nextSubcategoryAllocations);
+    if (categoriesUnchanged && subcategoriesUnchanged && categoryAllocationsUnchanged && subcategoryAllocationsUnchanged) {
       return task;
     }
     remappedTaskCount += 1;
     return {
       ...task,
-      categories: nextCategories
+      categories: nextCategories,
+      categoryAllocations: nextCategoryAllocations,
+      subcategories: nextSubcategories,
+      subcategoryAllocations: nextSubcategoryAllocations
     };
   });
 
@@ -2959,9 +3817,12 @@ function normalizeTask(input) {
   const categories = sanitizeCategoryKeys(
     Array.isArray(input.categories) ? input.categories : [input.category]
   );
+  const normalizedCategories = categories.length ? categories : [getDefaultCategoryKey()];
 
   const startAt = normalizeDateTimeInput(input.startAt || input.start || "");
   const endAt = normalizeDateTimeInput(input.endAt || input.end || "");
+  const durationMinutes = getDurationMinutes(startAt, endAt);
+  const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, input.status) ? input.status : "todo";
   const priority = PRIORITY_MAP[input.priority] ? input.priority : "important_not_urgent";
   const optionalTagTouched = input.optionalTagTouched === true;
 
@@ -2976,6 +3837,23 @@ function normalizeTask(input) {
     process = "";
     processScore = "";
   }
+
+  const categoryAllocations = sanitizeTaskCategoryAllocations(
+    input.categoryAllocations,
+    normalizedCategories,
+    durationMinutes
+  );
+  const subcategories = sanitizeTaskSubcategorySelections(input.subcategories, normalizedCategories);
+  const subcategoryAllocations = sanitizeTaskSubcategoryAllocations(
+    input.subcategoryAllocations,
+    subcategories,
+    normalizedCategories,
+    categoryAllocations
+  );
+  const deletedAt = normalizeDeletedAt(input.deletedAt);
+  const deletedFromStatus = deletedAt > 0
+    ? sanitizeTaskStatus(input.deletedFromStatus || status)
+    : "";
 
   return {
     id: String(input.id || createTaskId()),
@@ -2992,10 +3870,30 @@ function normalizeTask(input) {
     detail: String(input.detail || "").trim(),
     startAt,
     endAt,
-    categories: categories.length ? categories : [getDefaultCategoryKey()],
-    subcategories: sanitizeTaskSubcategorySelections(input.subcategories, categories),
-    status: Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, input.status) ? input.status : "todo"
+    categories: normalizedCategories,
+    categoryAllocations,
+    subcategories,
+    subcategoryAllocations,
+    status,
+    deletedAt,
+    deletedFromStatus
   };
+}
+
+function normalizeDeletedAt(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+  return Math.round(numeric);
+}
+
+function sanitizeTaskStatus(value) {
+  return Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, value) ? value : "todo";
+}
+
+function isTaskInTrash(task) {
+  return Boolean(task && normalizeDeletedAt(task.deletedAt) > 0);
 }
 
 function sanitizeImportanceLevel(value) {
@@ -3310,6 +4208,35 @@ function getTaskCategories(task) {
   return categories.length ? categories : [getDefaultCategoryKey()];
 }
 
+function getTaskCategoryAllocations(task) {
+  const categories = getTaskCategories(task);
+  return sanitizeTaskCategoryAllocations(
+    task && task.categoryAllocations,
+    categories,
+    getTaskDurationMinutes(task)
+  );
+}
+
+function getTaskCategoryOverlapAllocations(task, overlapMinutes) {
+  const categories = getTaskCategories(task);
+  const overlap = Math.max(0, Number(overlapMinutes) || 0);
+  const durationMinutes = getTaskDurationMinutes(task);
+  if (!categories.length || overlap <= 0) {
+    return {};
+  }
+
+  if (durationMinutes <= 0) {
+    const fallback = buildEvenMinuteAllocation(categories, Math.round(overlap));
+    return Object.fromEntries(categories.map((key) => [key, fallback[key] || 0]));
+  }
+
+  const ratio = Math.max(0, Math.min(1, overlap / durationMinutes));
+  const totalAllocations = getTaskCategoryAllocations(task);
+  return Object.fromEntries(
+    categories.map((key) => [key, (totalAllocations[key] || 0) * ratio])
+  );
+}
+
 function getPrimaryCategory(task) {
   const categories = getTaskCategories(task);
   return categories[0] || getDefaultCategoryKey();
@@ -3360,6 +4287,9 @@ function applyAutoUrgentEscalation(now = new Date()) {
   let hasChange = false;
 
   state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
     const targetLevel = getAutoUrgentLevelByTask(task, now);
     if (!targetLevel) {
       return;
@@ -3413,7 +4343,9 @@ function onSubmitTask(event) {
     endAt: normalizeDateTimeInput(refs.taskEnd ? refs.taskEnd.value : ""),
     categories,
     subcategories: getSelectedTaskSubcategoriesFromForm(),
-    status: refs.taskStatus.value
+    status: sanitizeTaskStatus(refs.taskStatus.value),
+    deletedAt: 0,
+    deletedFromStatus: ""
   };
 
   if (
@@ -3452,6 +4384,23 @@ function onSubmitTask(event) {
     return;
   }
 
+  const categoryAllocationResult = getTaskCategoryAllocationsForSubmit(task.categories, duration);
+  if (!categoryAllocationResult.allocations) {
+    alert(categoryAllocationResult.message || "请检查大类时长分配。");
+    return;
+  }
+  task.categoryAllocations = categoryAllocationResult.allocations;
+
+  const subcategoryAllocationResult = getTaskSubcategoryAllocationsForSubmit(
+    task.subcategories,
+    task.categoryAllocations
+  );
+  if (!subcategoryAllocationResult.allocations) {
+    alert(subcategoryAllocationResult.message || "请检查小类时长分配。");
+    return;
+  }
+  task.subcategoryAllocations = subcategoryAllocationResult.allocations;
+
   const existingIndex = state.tasks.findIndex((t) => t.id === task.id);
   if (existingIndex > -1) {
     state.tasks[existingIndex] = task;
@@ -3482,6 +4431,8 @@ function resetForm() {
   setSelectedProcessToForm(DEFAULT_PROCESS);
   setSelectedProcessScoreToForm("");
   setOptionalTagMode(DEFAULT_OPTIONAL_TAG_MODE);
+  state.taskCategoryAllocationInputs = {};
+  state.taskSubcategoryAllocationInputs = {};
   setSelectedTaskSubcategoriesToForm({});
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
@@ -3503,6 +4454,7 @@ function updateDurationPreview() {
   }
   const minutes = getDurationMinutes(refs.taskStart.value, refs.taskEnd.value);
   refs.durationPreview.textContent = minutes > 0 ? formatDuration(minutes) : "--";
+  renderCategorySummary();
 }
 
 function renderAll() {
@@ -3514,6 +4466,7 @@ function renderAll() {
   renderAllocationOverview();
   renderBedtimeReview();
   renderTaskCategoryPage();
+  renderTrashPage();
 }
 
 function getBedtimeReviewDateValue() {
@@ -3588,6 +4541,9 @@ function renderBedtimeReview() {
   let totalRiskCount = 0;
 
   state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
     const range = getTaskRange(task);
     if (!range) {
       return;
@@ -3753,6 +4709,9 @@ function computeTaskCategoryStats(day) {
   let usedMinutes = 0;
 
   state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
     const range = getTaskRange(task);
     if (!range) {
       return;
@@ -3765,6 +4724,11 @@ function computeTaskCategoryStats(day) {
 
     usedMinutes += overlap;
     const taskCategories = getTaskCategories(task);
+    const taskCategoryAllocations = getTaskCategoryAllocations(task);
+    const taskDuration = getTaskDurationMinutes(task);
+    const overlapRatio = taskDuration > 0
+      ? Math.max(0, Math.min(1, overlap / taskDuration))
+      : 0;
     const taskText = `${task.name || ""} ${task.detail || ""}`;
 
     groups.forEach((group) => {
@@ -3772,7 +4736,10 @@ function computeTaskCategoryStats(day) {
         return;
       }
 
-      const share = overlap / taskCategories.length;
+      const categoryTotalMinutes = taskCategoryAllocations[group.key] || 0;
+      const share = taskDuration > 0
+        ? categoryTotalMinutes * overlapRatio
+        : overlap / taskCategories.length;
       group.totalMinutes += share;
 
       const selectedSubcategories = getTaskSubcategoriesForGroup(task, group.key);
@@ -3786,8 +4753,32 @@ function computeTaskCategoryStats(day) {
       if (!targets.length) {
         return;
       }
-      const subShare = share / targets.length;
 
+      if (selectedSubcategories.length && taskDuration > 0) {
+        const sourceGroupAllocations = task
+          && task.subcategoryAllocations
+          && typeof task.subcategoryAllocations === "object"
+          && task.subcategoryAllocations[group.key]
+          && typeof task.subcategoryAllocations[group.key] === "object"
+          ? task.subcategoryAllocations[group.key]
+          : {};
+        const normalizedSubcategoryTotals = normalizeMinuteAllocationMap(
+          sourceGroupAllocations,
+          selectedSubcategories,
+          categoryTotalMinutes
+        );
+
+        targets.forEach((subcategoryKey) => {
+          if (!Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
+            return;
+          }
+          const totalMinutes = normalizedSubcategoryTotals[subcategoryKey] || 0;
+          group.subcategoryTotals[subcategoryKey] += totalMinutes * overlapRatio;
+        });
+        return;
+      }
+
+      const subShare = share / targets.length;
       targets.forEach((subcategoryKey) => {
         if (Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
           group.subcategoryTotals[subcategoryKey] += subShare;
@@ -4083,20 +5074,51 @@ function syncTaskSubcategoryConfigChanges() {
   let tasksChanged = false;
 
   state.tasks = state.tasks.map((task) => {
-    const nextSubcategories = sanitizeTaskSubcategorySelections(task.subcategories, getTaskCategories(task));
+    const categories = getTaskCategories(task);
+    const nextSubcategories = sanitizeTaskSubcategorySelections(task.subcategories, categories);
+    const nextCategoryAllocations = sanitizeTaskCategoryAllocations(
+      task.categoryAllocations,
+      categories,
+      getTaskDurationMinutes(task)
+    );
+    const nextSubcategoryAllocations = sanitizeTaskSubcategoryAllocations(
+      task.subcategoryAllocations,
+      nextSubcategories,
+      categories,
+      nextCategoryAllocations
+    );
     const prevSerialized = JSON.stringify(task.subcategories || {});
     const nextSerialized = JSON.stringify(nextSubcategories);
-    if (prevSerialized !== nextSerialized) {
+    const categoryAllocPrevSerialized = JSON.stringify(task.categoryAllocations || {});
+    const categoryAllocNextSerialized = JSON.stringify(nextCategoryAllocations);
+    const subcategoryAllocPrevSerialized = JSON.stringify(task.subcategoryAllocations || {});
+    const subcategoryAllocNextSerialized = JSON.stringify(nextSubcategoryAllocations);
+    if (
+      prevSerialized !== nextSerialized
+      || categoryAllocPrevSerialized !== categoryAllocNextSerialized
+      || subcategoryAllocPrevSerialized !== subcategoryAllocNextSerialized
+    ) {
       tasksChanged = true;
       return {
         ...task,
-        subcategories: nextSubcategories
+        subcategories: nextSubcategories,
+        categoryAllocations: nextCategoryAllocations,
+        subcategoryAllocations: nextSubcategoryAllocations
       };
     }
     return task;
   });
 
   state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(
+    state.taskSubcategorySelections,
+    getSelectedCategoriesFromForm()
+  );
+  state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
+    state.taskCategoryAllocationInputs,
+    getSelectedCategoriesFromForm()
+  );
+  state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
+    state.taskSubcategoryAllocationInputs,
     state.taskSubcategorySelections,
     getSelectedCategoriesFromForm()
   );
@@ -4445,6 +5467,9 @@ function shouldIgnoreBoardDateForStatus(status) {
 }
 
 function shouldShowTaskOnBoard(task, dateValue) {
+  if (isTaskInTrash(task)) {
+    return false;
+  }
   const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, task.status) ? task.status : "todo";
   if (shouldIgnoreBoardDateForStatus(status)) {
     return true;
@@ -4566,9 +5591,13 @@ function fillForm(task) {
     refs.taskStart.value = task.startAt;
     refs.taskEnd.value = task.endAt;
   }
-  setSelectedTaskSubcategoriesToForm(task.subcategories, getTaskCategories(task));
-  setSelectedCategoriesToForm(getTaskCategories(task));
+  const categories = getTaskCategories(task);
+  setSelectedCategoriesToForm(categories);
+  setTaskCategoryAllocationInputsToForm(task.categoryAllocations, categories);
+  setSelectedTaskSubcategoriesToForm(task.subcategories, categories);
+  setTaskSubcategoryAllocationInputsToForm(task.subcategoryAllocations, task.subcategories, categories);
   refs.taskStatus.value = task.status;
+  renderCategorySummary();
   updateDetailCount();
   updateDurationPreview();
   persistTaskFormDraft();
@@ -4604,13 +5633,364 @@ function openNativeDateTimePicker(input) {
 }
 
 function deleteTask(taskId) {
-  if (!confirm("\u786E\u8BA4\u5220\u9664\u8BE5\u4EFB\u52A1\u5417\uFF1F")) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || isTaskInTrash(task)) {
     return;
   }
-  state.tasks = state.tasks.filter((task) => task.id !== taskId);
+  if (!confirm("确认将该任务移入回收站吗？7 天后自动永久清除。")) {
+    return;
+  }
+  const deletedAt = Date.now();
+  state.tasks = state.tasks.map((item) => {
+    if (item.id !== taskId) {
+      return item;
+    }
+    return {
+      ...item,
+      deletedAt,
+      deletedFromStatus: sanitizeTaskStatus(item.status)
+    };
+  });
+  if (refs.taskId && refs.taskId.value === taskId) {
+    resetForm();
+  }
   delete state.collapsedById[taskId];
+  removeTrashSelection(taskId);
   saveTasks();
   renderAll();
+}
+
+function restoreTaskFromTrash(taskId, options = {}) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || !isTaskInTrash(task)) {
+    return;
+  }
+  const shouldConfirm = options.skipConfirm !== true;
+  if (shouldConfirm && !confirm("确认恢复该任务吗？")) {
+    return;
+  }
+  state.tasks = state.tasks.map((item) => {
+    if (item.id !== taskId) {
+      return item;
+    }
+    const restoredStatus = sanitizeTaskStatus(item.deletedFromStatus || item.status);
+    return {
+      ...item,
+      deletedAt: 0,
+      deletedFromStatus: "",
+      status: restoredStatus
+    };
+  });
+  removeTrashSelection(taskId);
+  saveTasks();
+  renderAll();
+}
+
+function permanentlyDeleteTask(taskId, options = {}) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || !isTaskInTrash(task)) {
+    return;
+  }
+  const shouldConfirm = options.skipConfirm !== true;
+  if (shouldConfirm && !confirm("确认彻底删除该任务吗？此操作无法撤销。")) {
+    return;
+  }
+  state.tasks = state.tasks.filter((item) => item.id !== taskId);
+  delete state.collapsedById[taskId];
+  removeTrashSelection(taskId);
+  saveTasks();
+  renderAll();
+}
+
+function getTrashDaysRemaining(deletedAt, nowTs = Date.now()) {
+  const normalizedDeletedAt = normalizeDeletedAt(deletedAt);
+  if (!normalizedDeletedAt) {
+    return 0;
+  }
+  const remaining = TRASH_RETENTION_MS - (nowTs - normalizedDeletedAt);
+  if (remaining <= 0) {
+    return 0;
+  }
+  return Math.ceil(remaining / (24 * 60 * 60 * 1000));
+}
+
+function cleanupExpiredTrashTasks(options = {}) {
+  const nowTs = Number(options.nowTs) || Date.now();
+  const keptTasks = [];
+  const removedIds = [];
+
+  state.tasks.forEach((task) => {
+    if (!isTaskInTrash(task)) {
+      keptTasks.push(task);
+      return;
+    }
+    const deletedAt = normalizeDeletedAt(task.deletedAt);
+    if (!deletedAt || nowTs - deletedAt < TRASH_RETENTION_MS) {
+      keptTasks.push(task);
+      return;
+    }
+    removedIds.push(task.id);
+  });
+
+  if (!removedIds.length) {
+    return 0;
+  }
+
+  state.tasks = keptTasks;
+  removedIds.forEach((taskId) => {
+    delete state.collapsedById[taskId];
+  });
+  state.trashSelectedTaskIds = new Set(
+    [...state.trashSelectedTaskIds].filter((taskId) => !removedIds.includes(taskId))
+  );
+
+  if (options.skipSave) {
+    return removedIds.length;
+  }
+
+  saveTasks({ skipCloudSync: options.skipCloudSync === true });
+  return removedIds.length;
+}
+
+function getTrashTasks() {
+  return state.tasks
+    .filter((task) => isTaskInTrash(task))
+    .sort((left, right) => normalizeDeletedAt(right.deletedAt) - normalizeDeletedAt(left.deletedAt));
+}
+
+function setTrashSelectionMode(enabled) {
+  const next = Boolean(enabled);
+  state.trashSelectionMode = next;
+  if (!next) {
+    state.trashSelectedTaskIds = new Set();
+  }
+}
+
+function toggleTrashSelectionMode() {
+  setTrashSelectionMode(!state.trashSelectionMode);
+  renderTrashPage();
+}
+
+function removeTrashSelection(taskId) {
+  if (!state.trashSelectedTaskIds.has(taskId)) {
+    return;
+  }
+  const next = new Set(state.trashSelectedTaskIds);
+  next.delete(taskId);
+  state.trashSelectedTaskIds = next;
+}
+
+function toggleTrashTaskSelection(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || !isTaskInTrash(task)) {
+    return;
+  }
+  const next = new Set(state.trashSelectedTaskIds);
+  if (next.has(taskId)) {
+    next.delete(taskId);
+  } else {
+    next.add(taskId);
+  }
+  state.trashSelectedTaskIds = next;
+  renderTrashPage();
+}
+
+function getValidSelectedTrashTaskIds(trashTasks = getTrashTasks()) {
+  const validIds = new Set(trashTasks.map((task) => task.id));
+  return [...state.trashSelectedTaskIds].filter((taskId) => validIds.has(taskId));
+}
+
+function restoreSelectedTrashTasks() {
+  const selectedIds = getValidSelectedTrashTaskIds();
+  if (!selectedIds.length) {
+    return;
+  }
+  if (!confirm(`确认恢复选中的 ${selectedIds.length} 条任务吗？`)) {
+    return;
+  }
+  const selectedSet = new Set(selectedIds);
+  state.tasks = state.tasks.map((task) => {
+    if (!selectedSet.has(task.id)) {
+      return task;
+    }
+    const restoredStatus = sanitizeTaskStatus(task.deletedFromStatus || task.status);
+    return {
+      ...task,
+      deletedAt: 0,
+      deletedFromStatus: "",
+      status: restoredStatus
+    };
+  });
+  setTrashSelectionMode(false);
+  saveTasks();
+  renderAll();
+}
+
+function permanentlyDeleteSelectedTrashTasks() {
+  const selectedIds = getValidSelectedTrashTaskIds();
+  if (!selectedIds.length) {
+    return;
+  }
+  if (!confirm(`确认彻底删除选中的 ${selectedIds.length} 条任务吗？此操作无法撤销。`)) {
+    return;
+  }
+  const selectedSet = new Set(selectedIds);
+  state.tasks = state.tasks.filter((task) => !selectedSet.has(task.id));
+  selectedIds.forEach((taskId) => {
+    delete state.collapsedById[taskId];
+  });
+  setTrashSelectionMode(false);
+  saveTasks();
+  renderAll();
+}
+
+function createSummaryItem(labelText, valueText) {
+  const item = document.createElement("div");
+  item.className = "summary-item";
+
+  const label = document.createElement("span");
+  label.textContent = labelText;
+  const value = document.createElement("strong");
+  value.textContent = valueText;
+
+  item.appendChild(label);
+  item.appendChild(value);
+  return item;
+}
+
+function renderTrashPage() {
+  if (!refs.trashSummaryPanel || !refs.trashList || !refs.trashBatchBar) {
+    return;
+  }
+
+  cleanupExpiredTrashTasks();
+  const nowTs = Date.now();
+  const trashTasks = getTrashTasks();
+  const validSelectedIds = getValidSelectedTrashTaskIds(trashTasks);
+  state.trashSelectedTaskIds = new Set(validSelectedIds);
+  const selectedCount = validSelectedIds.length;
+  const willExpireSoonCount = trashTasks.filter((task) => getTrashDaysRemaining(task.deletedAt, nowTs) <= 1).length;
+  const maxDaysRemaining = trashTasks.length
+    ? Math.max(...trashTasks.map((task) => getTrashDaysRemaining(task.deletedAt, nowTs)))
+    : 0;
+
+  refs.trashSummaryPanel.innerHTML = "";
+  refs.trashSummaryPanel.appendChild(createSummaryItem("回收站项目", String(trashTasks.length)));
+  refs.trashSummaryPanel.appendChild(createSummaryItem("24h 内清除", String(willExpireSoonCount)));
+  refs.trashSummaryPanel.appendChild(createSummaryItem("最长剩余", `${maxDaysRemaining}天`));
+
+  if (refs.trashSelectionToggleBtn) {
+    refs.trashSelectionToggleBtn.textContent = state.trashSelectionMode ? "退出批量" : "批量管理";
+    refs.trashSelectionToggleBtn.classList.toggle("is-active", state.trashSelectionMode);
+  }
+
+  refs.trashList.innerHTML = "";
+  if (!trashTasks.length) {
+    const empty = document.createElement("p");
+    empty.className = "trash-empty";
+    empty.textContent = "回收站是空的。";
+    refs.trashList.appendChild(empty);
+  } else {
+    trashTasks.forEach((task) => {
+      const taskId = String(task.id || "");
+      const selected = state.trashSelectedTaskIds.has(taskId);
+      const deletedAt = normalizeDeletedAt(task.deletedAt);
+      const daysRemaining = getTrashDaysRemaining(deletedAt, nowTs);
+      const sourceStatus = sanitizeTaskStatus(task.deletedFromStatus || task.status);
+
+      const row = document.createElement("article");
+      row.className = "trash-item";
+
+      if (state.trashSelectionMode) {
+        const selectBtn = document.createElement("button");
+        selectBtn.type = "button";
+        selectBtn.className = "secondary trash-select-btn";
+        selectBtn.textContent = selected ? "☑" : "☐";
+        selectBtn.setAttribute("aria-label", selected ? "取消选择" : "选择任务");
+        selectBtn.addEventListener("click", () => {
+          toggleTrashTaskSelection(taskId);
+        });
+        row.appendChild(selectBtn);
+      }
+
+      const main = document.createElement("div");
+      main.className = "trash-item-main";
+      if (state.trashSelectionMode && selected) {
+        main.classList.add("is-selected");
+      }
+      if (state.trashSelectionMode) {
+        main.addEventListener("click", () => {
+          toggleTrashTaskSelection(taskId);
+        });
+      }
+
+      const head = document.createElement("div");
+      head.className = "trash-item-head";
+
+      const title = document.createElement("h3");
+      title.className = "trash-item-title";
+      title.textContent = task.name || "未命名任务";
+
+      const expire = document.createElement("span");
+      expire.className = "trash-expire-pill";
+      if (daysRemaining <= 1) {
+        expire.classList.add("is-soon");
+      }
+      expire.textContent = `${daysRemaining}天后清除`;
+
+      head.appendChild(title);
+      head.appendChild(expire);
+
+      const meta = document.createElement("p");
+      meta.className = "trash-item-meta";
+      meta.textContent = `原状态：${STATUS_LABELS[sourceStatus] || STATUS_LABELS.todo} · 删除于 ${formatDateTime(deletedAt)}`;
+
+      const detail = document.createElement("p");
+      detail.className = "trash-item-detail";
+      detail.textContent = task.detail || "无详情";
+
+      main.appendChild(head);
+      main.appendChild(meta);
+      main.appendChild(detail);
+
+      if (!state.trashSelectionMode) {
+        const actions = document.createElement("div");
+        actions.className = "trash-item-actions";
+
+        const restoreBtn = document.createElement("button");
+        restoreBtn.type = "button";
+        restoreBtn.className = "secondary";
+        restoreBtn.textContent = "恢复";
+        restoreBtn.addEventListener("click", () => {
+          restoreTaskFromTrash(taskId, { skipConfirm: true });
+        });
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "danger";
+        deleteBtn.textContent = "彻底删除";
+        deleteBtn.addEventListener("click", () => {
+          permanentlyDeleteTask(taskId);
+        });
+
+        actions.appendChild(restoreBtn);
+        actions.appendChild(deleteBtn);
+        main.appendChild(actions);
+      }
+
+      row.appendChild(main);
+      refs.trashList.appendChild(row);
+    });
+  }
+
+  const shouldShowBatchBar = state.trashSelectionMode && selectedCount > 0;
+  refs.trashBatchBar.classList.toggle("is-hidden", !shouldShowBatchBar);
+  if (refs.trashBatchCount) {
+    refs.trashBatchCount.textContent = `已选 ${selectedCount} 项`;
+  }
+  if (refs.trashFootnote) {
+    refs.trashFootnote.classList.toggle("is-hidden", state.trashSelectionMode);
+  }
 }
 
 function renderDailyOverview() {
@@ -4685,6 +6065,9 @@ function computeWeeklyStats(day) {
   let usedMinutes = 0;
 
   state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
     const range = getTaskRange(task);
     if (!range) {
       return;
@@ -4696,12 +6079,10 @@ function computeWeeklyStats(day) {
     }
 
     usedMinutes += overlap;
-
-    const categories = getTaskCategories(task);
-    const share = overlap / categories.length;
-    categories.forEach((category) => {
-      if (Object.prototype.hasOwnProperty.call(categoryTotals, category)) {
-        categoryTotals[category] += share;
+    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap);
+    Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
+      if (Object.prototype.hasOwnProperty.call(categoryTotals, categoryKey)) {
+        categoryTotals[categoryKey] += minutes;
       }
     });
   });
@@ -4728,7 +6109,7 @@ function renderWeekBars(categoryRanking) {
   if (!categoryRanking.length) {
     const empty = document.createElement("p");
     empty.className = "week-bars-empty";
-    empty.textContent = "鏈懆鏆傛棤绫诲埆鐢ㄦ椂璁板綍";
+    empty.textContent = "本周暂无类别时长分配记录";
     refs.weekBars.appendChild(empty);
     updateWeekBarsScrollState();
     return;
@@ -4767,7 +6148,7 @@ function renderWeekBars(categoryRanking) {
     item.appendChild(track);
     item.appendChild(hourText);
     item.appendChild(categoryLabel);
-    item.title = `${category.label} | 鏈懆绱 ${formatDuration(category.minutes)} | 鎺掑悕 #${index + 1}`;
+    item.title = `${category.label} | 閺堫剙鎳嗙槐顖濐吀 ${formatDuration(category.minutes)} | 閹烘帒鎮?#${index + 1}`;
 
     refs.weekBars.appendChild(item);
   });
@@ -4848,6 +6229,9 @@ function getIsoWeekInfo(date) {
 function getSlotSegments(slotStart, slotEnd) {
   return state.tasks
     .map((task) => {
+      if (isTaskInTrash(task)) {
+        return null;
+      }
       const range = getTaskRange(task);
       if (!range) {
         return null;
@@ -4877,6 +6261,9 @@ function computeDailyStats(day) {
   let usedMinutes = 0;
 
   state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
     const range = getTaskRange(task);
     if (!range) {
       return;
@@ -4888,12 +6275,11 @@ function computeDailyStats(day) {
     }
 
     usedMinutes += overlap;
-
     const categories = getTaskCategories(task);
-    const share = overlap / categories.length;
-    categories.forEach((category) => {
-      if (Object.prototype.hasOwnProperty.call(totals, category)) {
-        totals[category] += share;
+    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap);
+    Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
+      if (Object.prototype.hasOwnProperty.call(totals, categoryKey)) {
+        totals[categoryKey] += minutes;
       }
     });
 
@@ -5226,6 +6612,7 @@ function normalizeDateInputValue(value) {
 function pad2(num) {
   return String(num).padStart(2, "0");
 }
+
 
 
 

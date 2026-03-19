@@ -29,6 +29,10 @@
         <span class="menu-toggle-label">🗂 任务分类</span>
         <span class="menu-nav-arrow" aria-hidden="true">›</span>
       </button>
+      <button id="menu-trash-btn" type="button" class="menu-nav-row" role="menuitem">
+        <span class="menu-toggle-label">🗑 回收站</span>
+        <span class="menu-nav-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="menu-divider" aria-hidden="true"></div>
       <button id="menu-auth-btn" type="button" class="menu-action-btn" role="menuitem">登录</button>
     </div>
@@ -210,6 +214,13 @@
             <details id="task-category-picker" class="category-picker">
               <summary id="task-category-summary" class="category-summary is-empty">请选择任务类别</summary>
               <div class="category-checklist" id="task-category-group"></div>
+              <section id="task-category-allocation-panel" class="task-category-allocation-panel is-hidden" aria-live="polite">
+                <div class="task-category-allocation-head">
+                  <span class="task-category-allocation-title">类别时长分配（分钟）</span>
+                  <span id="task-category-allocation-caption" class="task-category-allocation-caption">多选时请填写各类别分配分钟数</span>
+                </div>
+                <div id="task-category-allocation-list" class="task-category-allocation-list"></div>
+              </section>
             </details>
           </div>
 
@@ -347,6 +358,34 @@
       <div id="task-category-page-summary" class="summary-row"></div>
       <div id="task-category-page-cards" class="task-category-cards"></div>
     </section>
+  </section>
+
+  <section id="trash-page" class="app trash-page is-hidden" aria-hidden="true">
+    <header class="app-header trash-page-header">
+      <h1>回收站</h1>
+      <p>删除后的任务会先进入回收站，7 天后自动永久清除。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>已删除任务</h2>
+        <div class="head-tools trash-tools">
+          <button id="trash-selection-toggle-btn" type="button" class="secondary">批量管理</button>
+          <button id="trash-page-back-btn" type="button" class="secondary">返回看板</button>
+        </div>
+      </div>
+      <div id="trash-page-summary" class="summary-row"></div>
+      <div id="trash-page-list" class="trash-list"></div>
+      <p id="trash-page-footnote" class="trash-footnote">项目将在删除 7 天后自动永久清除</p>
+    </section>
+
+    <div id="trash-batch-bar" class="trash-batch-bar is-hidden">
+      <div class="trash-batch-content">
+        <span id="trash-batch-count" class="trash-batch-count">已选 0 项</span>
+        <button id="trash-batch-restore-btn" type="button" class="secondary">恢复</button>
+        <button id="trash-batch-delete-btn" type="button" class="danger">彻底删除</button>
+      </div>
+    </div>
   </section>
 
   <div id="category-manager-modal" class="category-manager-modal is-hidden" aria-hidden="true">
