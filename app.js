@@ -2145,7 +2145,7 @@ function restoreTaskFormDraft() {
   setSelectedProcessScoreToForm(draft.processScore);
   setOptionalTagMode(draft.optionalTagMode);
   handlePriorityChange();
-  refs.taskDetail.value = typeof draft.detail === "string" ? draft.detail.slice(0, 200) : "";
+  refs.taskDetail.value = typeof draft.detail === "string" ? draft.detail.slice(0, 300) : "";
 
   if (refs.taskStart && refs.taskEnd) {
     refs.taskStart.value = normalizeDateTimeInput(draft.startAt || "");
@@ -4475,8 +4475,8 @@ function onSubmitTask(event) {
     return;
   }
 
-  if (task.detail.length > 200) {
-    alert("\u4EFB\u52A1\u8BE6\u60C5\u4E0D\u80FD\u8D85\u8FC7200\u5B57\u3002");
+  if (task.detail.length > 300) {
+    alert("\u4EFB\u52A1\u8BE6\u60C5\u4E0D\u80FD\u8D85\u8FC7300\u5B57\u3002");
     return;
   }
 
@@ -4552,7 +4552,7 @@ function resetForm() {
 }
 
 function updateDetailCount() {
-  refs.detailCount.textContent = `${refs.taskDetail.value.length}/200`;
+  refs.detailCount.textContent = `${refs.taskDetail.value.length}/300`;
 }
 
 function updateDurationPreview() {
