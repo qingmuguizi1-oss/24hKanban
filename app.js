@@ -2960,6 +2960,8 @@ function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesF
   refs.taskCategoryAllocationPanel.classList.remove("is-hidden");
   updateTaskCategoryAllocationCaption(keys, draft);
 
+  const inputElements = {};
+
   keys.forEach((key, index) => {
     const row = document.createElement("div");
     row.className = "task-category-allocation-item";
@@ -2976,6 +2978,7 @@ function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesF
     const inputWrap = document.createElement("span");
     inputWrap.className = "task-category-allocation-input-wrap";
     const input = document.createElement("input");
+    inputElements[key] = input;
     input.type = "number";
     input.min = "0";
     input.step = "1";
@@ -2984,6 +2987,37 @@ function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesF
     input.disabled = keys.length === 1;
     input.addEventListener("input", (event) => {
       state.taskCategoryAllocationInputs[key] = event.target.value;
+
+      if (keys.length >= 2) {
+        let targetKey = null;
+        // Find the last key that is not the currently edited key
+        for (let i = keys.length - 1; i >= 0; i--) {
+          if (keys[i] !== key) {
+            targetKey = keys[i];
+            break;
+          }
+        }
+        if (targetKey) {
+          let sumWithoutTarget = 0;
+          keys.forEach((k) => {
+            if (k !== targetKey) {
+              const val = normalizeMinutesInputValue(state.taskCategoryAllocationInputs[k]);
+              sumWithoutTarget += val === null ? 0 : val;
+            }
+          });
+          let remaining = getTaskDurationMinutesFromForm() - sumWithoutTarget;
+          if (remaining < 0) remaining = 0;
+          
+          // Only update the state and UI if the value actually changed
+          if (state.taskCategoryAllocationInputs[targetKey] !== String(remaining)) {
+            state.taskCategoryAllocationInputs[targetKey] = String(remaining);
+            if (inputElements[targetKey]) {
+              inputElements[targetKey].value = String(remaining);
+            }
+          }
+        }
+      }
+
       updateTaskCategoryAllocationCaption(keys, getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()));
       renderTaskSubcategoryPanel(keys);
       persistTaskFormDraft();
@@ -3213,6 +3247,8 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
       allocationWrap.appendChild(caption);
 
       if (selectedSubcategoryOptions.length > 1) {
+        const inputElements = {};
+
         selectedSubcategoryOptions.forEach((option) => {
           const row = document.createElement("div");
           row.className = "task-subcategory-allocation-row";
@@ -3224,6 +3260,7 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
           inputWrap.className = "task-category-allocation-input-wrap";
 
           const input = document.createElement("input");
+          inputElements[option.key] = input;
           input.type = "number";
           input.min = "0";
           input.step = "1";
@@ -3234,6 +3271,41 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
               state.taskSubcategoryAllocationInputs[group.key] = {};
             }
             state.taskSubcategoryAllocationInputs[group.key][option.key] = event.target.value;
+
+            const subKeys = selectedSubcategoryOptions.map((item) => item.key);
+            if (subKeys.length >= 2) {
+              let targetKey = null;
+              // Find the last key that is not the currently edited key
+              for (let i = subKeys.length - 1; i >= 0; i--) {
+                if (subKeys[i] !== option.key) {
+                  targetKey = subKeys[i];
+                  break;
+                }
+              }
+              if (targetKey) {
+                let sumWithoutTarget = 0;
+                subKeys.forEach((k) => {
+                  if (k !== targetKey) {
+                    const val = normalizeMinutesInputValue(state.taskSubcategoryAllocationInputs[group.key][k]);
+                    sumWithoutTarget += val === null ? 0 : val;
+                  }
+                });
+                // Recalculate category draft to get latest allocations
+                const currentCategoryDraft = getCategoryAllocationDraftForForm(normalizedSelectedKeys, getTaskDurationMinutesFromForm());
+                const currentGroupTotal = currentCategoryDraft.allocations[group.key] || 0;
+                let remaining = currentGroupTotal - sumWithoutTarget;
+                if (remaining < 0) remaining = 0;
+                
+                // Only update if changed
+                if (state.taskSubcategoryAllocationInputs[group.key][targetKey] !== String(remaining)) {
+                  state.taskSubcategoryAllocationInputs[group.key][targetKey] = String(remaining);
+                  if (inputElements[targetKey]) {
+                    inputElements[targetKey].value = String(remaining);
+                  }
+                }
+              }
+            }
+
             updateCaption();
             persistTaskFormDraft();
           });
