@@ -2464,7 +2464,17 @@ function getCategoryColorByKey(key, fallbackIndex = 0, definitions = state.categ
   if (found && found.color) {
     return found.color;
   }
-  return PIE_COLORS[Math.abs(fallbackIndex) % PIE_COLORS.length] || DEFAULT_CATEGORY_COLOR;
+  
+  // Use global index if possible to ensure consistent colors
+  let globalIndex = fallbackIndex;
+  if (definitions) {
+    const idx = definitions.findIndex(def => def.key === key);
+    if (idx !== -1) {
+      globalIndex = idx;
+    }
+  }
+  
+  return PIE_COLORS[Math.abs(globalIndex) % PIE_COLORS.length] || DEFAULT_CATEGORY_COLOR;
 }
 
 function buildCategoryLabelFromKey(key) {
@@ -2626,7 +2636,22 @@ function renderCategoryChecklist() {
   renderCategorySummary();
 }
 
-function handleCategoryInputChanged() {
+function handleCategoryInputChanged(event) {
+  const checkbox = event.target;
+  const key = checkbox.value;
+  
+  if (!state.categorySelectionOrder) {
+    state.categorySelectionOrder = [];
+  }
+  
+  if (checkbox.checked) {
+    if (!state.categorySelectionOrder.includes(key)) {
+      state.categorySelectionOrder.push(key);
+    }
+  } else {
+    state.categorySelectionOrder = state.categorySelectionOrder.filter(k => k !== key);
+  }
+
   const selectedCategories = getSelectedCategoriesFromForm();
   state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(
     state.taskSubcategorySelections,
@@ -2652,11 +2677,21 @@ function getSelectedCategoriesFromForm() {
       selected.push(input.value);
     }
   });
+  // If we have a previously saved order in state, use it to sort the currently selected ones
+  if (state.categorySelectionOrder && state.categorySelectionOrder.length) {
+    const orderMap = new Map(state.categorySelectionOrder.map((key, index) => [key, index]));
+    selected.sort((a, b) => {
+      const indexA = orderMap.has(a) ? orderMap.get(a) : Infinity;
+      const indexB = orderMap.has(b) ? orderMap.get(b) : Infinity;
+      return indexA - indexB;
+    });
+  }
   return sanitizeCategoryKeys(selected);
 }
 
 function setSelectedCategoriesToForm(categoryKeys) {
   const selected = new Set(sanitizeCategoryKeys(categoryKeys));
+  state.categorySelectionOrder = Array.from(selected); // Keep track of selection order
   getCategoryInputs().forEach((input) => {
     input.checked = selected.has(input.value);
   });
@@ -6070,7 +6105,8 @@ function renderDailyOverview() {
   state.selectedDate = day;
   updateSelectedWeekBadge(day);
   const dayStart = new Date(`${day}T00:00`);
-  const totalSlots = (24 * 60) / SLOT_MINUTES;
+  // Fixed totalSlots calculation to handle edge cases if SLOT_MINUTES isn't perfectly dividing 24h
+  const totalSlots = Math.ceil((24 * 60) / SLOT_MINUTES);
   const slots = Array.from({ length: totalSlots }, (_, idx) => {
     const start = new Date(dayStart.getTime() + idx * SLOT_MINUTES * 60 * 1000);
     const end = new Date(start.getTime() + SLOT_MINUTES * 60 * 1000);
@@ -6089,13 +6125,56 @@ function renderDailyOverview() {
 
     if (segments.length) {
       const tooltipParts = [];
+      
       segments.forEach((segment) => {
-        const fill = document.createElement("span");
-        fill.className = "slot-fill";
-        fill.style.background = getCategoryColorByKey(getPrimaryCategory(segment.task), idx);
-        fill.style.left = `${(segment.offsetMinutes / SLOT_MINUTES) * 100}%`;
-        fill.style.width = `${(segment.overlapMinutes / SLOT_MINUTES) * 100}%`;
-        el.appendChild(fill);
+        const categories = getTaskCategories(segment.task);
+        const totalAllocations = getTaskCategoryAllocations(segment.task);
+        
+        let elapsed = segment.taskElapsedBeforeSlot;
+        let remainingSlotMinutes = segment.overlapMinutes;
+        let catCurrentLeft = 0; // Track the accumulated minutes for categories within THIS segment
+        
+        categories.forEach((catKey, catIdx) => {
+          if (remainingSlotMinutes <= 0) return;
+          
+          const catTotal = totalAllocations[catKey] || 0;
+          
+          // Calculate how much of THIS category falls into the current slot
+          // We know 'elapsed' minutes of the task have already passed before reaching this category
+          let catMinutesInSlot = 0;
+          
+          if (elapsed >= catTotal) {
+            // This category was completely finished before this slot started
+            elapsed -= catTotal;
+          } else {
+            // This category has some minutes left to render
+            const catRemaining = catTotal - elapsed;
+            catMinutesInSlot = Math.min(catRemaining, remainingSlotMinutes);
+            
+            // We used up some slot time, and we used up all 'elapsed' time
+            remainingSlotMinutes -= catMinutesInSlot;
+            elapsed = 0; // Future categories won't have any 'elapsed' time to skip
+            
+            if (catMinutesInSlot > 0) {
+              const fill = document.createElement("span");
+              fill.className = "slot-fill";
+              fill.style.background = getCategoryColorByKey(catKey, catIdx);
+              
+              const widthPercent = (catMinutesInSlot / SLOT_MINUTES) * 100;
+              // Add segment.offsetMinutes to the starting left position so we don't start at 0 if the task doesn't start at the beginning of the slot.
+              // Also add any previously accumulated width for THIS segment via currentLeft.
+              // BUT for subsequent tasks in the same slot, segment.offsetMinutes is absolute to the slot start, so we shouldn't add currentLeft of PREVIOUS tasks!
+              // Wait, currentLeft is scoped to the whole slot right now. It should be scoped to the segment if we use offsetMinutes!
+              // Let's use offsetMinutes + accumulated category minutes inside this segment.
+              const baseLeft = ((segment.offsetMinutes + catCurrentLeft) / SLOT_MINUTES) * 100;
+              fill.style.left = `${baseLeft}%`;
+              fill.style.width = `${widthPercent}%`;
+              
+              catCurrentLeft += catMinutesInSlot;
+              el.appendChild(fill);
+            }
+          }
+        });
 
         tooltipParts.push(`${segment.task.name} (${getCategoryLabels(segment.task)} ${Math.round(segment.overlapMinutes)}m)`);
       });
@@ -6104,8 +6183,10 @@ function renderDailyOverview() {
       el.title = `${startText}-${endText} | \u7A7A\u4F59`;
     }
 
-    if (idx % (60 / SLOT_MINUTES) === 0) {
-      el.dataset.label = `${slot.start.getHours()}:00`;
+    if (slot.start.getMinutes() === 0 || slot.start.getMinutes() === 30) {
+      if (slot.start.getMinutes() === 0) {
+        el.dataset.label = `${slot.start.getHours()}:00`;
+      }
     }
 
     refs.timeline.appendChild(el);
@@ -6309,16 +6390,28 @@ function getSlotSegments(slotStart, slotEnd) {
         return null;
       }
 
+      // Check if the task overlaps with this slot at all
       const overlapStart = Math.max(range.start.getTime(), slotStart.getTime());
       const overlapEnd = Math.min(range.end.getTime(), slotEnd.getTime());
       if (overlapEnd <= overlapStart) {
         return null;
       }
 
+      // Calculate how many minutes of the task have ALREADY elapsed before this slot starts
+      // This is crucial for multi-category tasks so we don't start the color distribution from the beginning in every slot
+      const taskStartMs = range.start.getTime();
+      let taskElapsedBeforeSlot = 0;
+      if (slotStart.getTime() > taskStartMs) {
+        taskElapsedBeforeSlot = (slotStart.getTime() - taskStartMs) / 60000;
+      }
+
       return {
         task,
+        // How far into the slot does this task start?
         offsetMinutes: (overlapStart - slotStart.getTime()) / 60000,
-        overlapMinutes: (overlapEnd - overlapStart) / 60000
+        // How long does this task run *within this specific slot*?
+        overlapMinutes: (overlapEnd - overlapStart) / 60000,
+        taskElapsedBeforeSlot
       };
     })
     .filter(Boolean)

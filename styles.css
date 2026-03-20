@@ -2592,7 +2592,7 @@ button.danger {
   }
 
   .timeline {
-    grid-template-columns: repeat(12, minmax(18px, 1fr));
+    grid-template-columns: repeat(24, minmax(18px, 1fr));
     gap: 3px;
   }
 
