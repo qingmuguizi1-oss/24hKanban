@@ -3654,7 +3654,7 @@ function renderCategoryManager() {
     colorInput.type = "color";
     colorInput.className = "category-manager-color";
     colorInput.value = normalizeCategoryColor(definition.color, DEFAULT_CATEGORY_COLOR);
-    colorInput.title = "绫诲埆棰滆壊";
+    colorInput.title = "类别颜色";
     colorInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { color: colorInput.value }, { skipManagerRerender: true });
     });
@@ -3664,7 +3664,7 @@ function renderCategoryManager() {
     nameInput.className = "category-manager-name";
     nameInput.maxLength = 24;
     nameInput.value = definition.label;
-    nameInput.placeholder = "绫诲埆鍚嶇О";
+    nameInput.placeholder = "类别名称";
     nameInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { label: nameInput.value }, { skipManagerRerender: true });
     });
@@ -3676,8 +3676,8 @@ function renderCategoryManager() {
     const dragHandle = document.createElement("button");
     dragHandle.type = "button";
     dragHandle.className = "category-manager-drag-handle";
-    dragHandle.textContent = "鈰嫯";
-    dragHandle.title = "鎷栨嫿鎺掑簭";
+    dragHandle.textContent = "拖拽";
+    dragHandle.title = "拖拽排序";
     dragHandle.setAttribute("draggable", "true");
     dragHandle.addEventListener("dragstart", (event) => {
       state.draggingCategoryKey = definition.key;
@@ -3700,7 +3700,7 @@ function renderCategoryManager() {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "danger category-manager-delete";
-    deleteBtn.textContent = "鍒犻櫎";
+    deleteBtn.textContent = "删除";
     deleteBtn.addEventListener("click", () => {
       deleteCategoryDefinition(definition.key);
     });
@@ -6301,7 +6301,7 @@ function renderWeekBars(categoryRanking) {
     item.appendChild(track);
     item.appendChild(hourText);
     item.appendChild(categoryLabel);
-    item.title = `${category.label} | 閺堫剙鎳嗙槐顖濐吀 ${formatDuration(category.minutes)} | 閹烘帒鎮?#${index + 1}`;
+    item.title = `${category.label} | 总时长 ${formatDuration(category.minutes)} | 排名 #${index + 1}`;
 
     refs.weekBars.appendChild(item);
   });

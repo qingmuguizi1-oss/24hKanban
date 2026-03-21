@@ -1815,7 +1815,8 @@ button.danger {
 .trash-list {
   margin-top: 12px;
   display: grid;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
 }
 
 .trash-empty {
@@ -1833,6 +1834,7 @@ button.danger {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   align-items: flex-start;
+  align-self: start;
 }
 
 .trash-select-btn {
