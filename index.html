@@ -260,8 +260,17 @@
           <div id="allocation-mode-switch" class="view-switch" role="group" aria-label="分配时间范围">
             <button type="button" id="mode-day" class="switch-btn is-active">天</button>
             <button type="button" id="mode-week" class="switch-btn">周</button>
+            <button type="button" id="mode-month" class="switch-btn">月</button>
+            <button type="button" id="mode-quarter" class="switch-btn">季</button>
           </div>
-          <label id="allocation-date-label"><input id="selected-date" type="date" aria-label="查看日期"><span id="selected-week" class="selected-week is-hidden">第--周</span></label>
+          <div id="allocation-date-container" class="allocation-date-container">
+            <input id="selected-date" type="date" aria-label="查看日期">
+            <div id="allocation-period-control" class="period-control is-hidden">
+              <button id="allocation-prev-period-btn" type="button" class="secondary icon-btn">&lt;</button>
+              <span id="selected-week" class="selected-week">第--周</span>
+              <button id="allocation-next-period-btn" type="button" class="secondary icon-btn">&gt;</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -330,9 +339,11 @@
       <div class="panel-head">
         <h2>回顾范围</h2>
         <div class="head-tools bedtime-review-week-tools">
-          <button id="bedtime-review-prev-week-btn" type="button" class="secondary">&lt;</button>
-          <span id="bedtime-review-week-display" class="selected-week">第--周</span>
-          <button id="bedtime-review-next-week-btn" type="button" class="secondary">&gt;</button>
+          <div class="period-control">
+            <button id="bedtime-review-prev-week-btn" type="button" class="secondary icon-btn">&lt;</button>
+            <span id="bedtime-review-week-display" class="selected-week">第--周</span>
+            <button id="bedtime-review-next-week-btn" type="button" class="secondary icon-btn">&gt;</button>
+          </div>
           <button id="bedtime-review-back-btn" type="button" class="secondary">返回看板</button>
         </div>
       </div>

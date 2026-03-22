@@ -325,8 +325,13 @@ const refs = {
   trashBatchDeleteBtn: document.getElementById("trash-batch-delete-btn"),
   selectedDate: document.getElementById("selected-date"),
   selectedWeek: document.getElementById("selected-week"),
+  allocationPeriodControl: document.getElementById("allocation-period-control"),
+  allocationPrevPeriodBtn: document.getElementById("allocation-prev-period-btn"),
+  allocationNextPeriodBtn: document.getElementById("allocation-next-period-btn"),
   modeDayBtn: document.getElementById("mode-day"),
   modeWeekBtn: document.getElementById("mode-week"),
+  modeMonthBtn: document.getElementById("mode-month"),
+  modeQuarterBtn: document.getElementById("mode-quarter"),
   boardDate: document.getElementById("board-date"),
   summaryUsed: document.getElementById("summary-used"),
   summaryFree: document.getElementById("summary-free"),
@@ -452,6 +457,16 @@ function init() {
     state.selectedDate = refs.selectedDate.value;
     renderAllocationOverview();
   });
+  if (refs.allocationPrevPeriodBtn) {
+    refs.allocationPrevPeriodBtn.addEventListener("click", () => {
+      shiftAllocationPeriod(-1);
+    });
+  }
+  if (refs.allocationNextPeriodBtn) {
+    refs.allocationNextPeriodBtn.addEventListener("click", () => {
+      shiftAllocationPeriod(1);
+    });
+  }
   refs.boardDate.addEventListener("input", () => {
     state.boardDate = refs.boardDate.value;
     renderBoard();
@@ -520,6 +535,12 @@ function init() {
   }
   if (refs.modeWeekBtn) {
     refs.modeWeekBtn.addEventListener("click", () => setAllocationMode("week"));
+  }
+  if (refs.modeMonthBtn) {
+    refs.modeMonthBtn.addEventListener("click", () => setAllocationMode("month"));
+  }
+  if (refs.modeQuarterBtn) {
+    refs.modeQuarterBtn.addEventListener("click", () => setAllocationMode("quarter"));
   }
   bindWeekBarsScrollEvents();
 
@@ -5353,8 +5374,29 @@ function normalizeKeywordText(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function shiftAllocationPeriod(offset) {
+  if (!Number.isFinite(offset) || offset === 0) {
+    return;
+  }
+  const base = parseDateTime(`${state.selectedDate}T00:00`) || new Date();
+  
+  if (state.allocationMode === "week") {
+    base.setDate(base.getDate() + offset * 7);
+  } else if (state.allocationMode === "month") {
+    base.setMonth(base.getMonth() + offset);
+  } else if (state.allocationMode === "quarter") {
+    base.setMonth(base.getMonth() + offset * 3);
+  }
+  
+  state.selectedDate = toDateInputValue(base);
+  if (refs.selectedDate) {
+    refs.selectedDate.value = state.selectedDate;
+  }
+  renderAllocationOverview();
+}
+
 function setAllocationMode(mode) {
-  if (mode !== "day" && mode !== "week") {
+  if (!["day", "week", "month", "quarter"].includes(mode)) {
     return;
   }
   state.allocationMode = mode;
@@ -5363,36 +5405,56 @@ function setAllocationMode(mode) {
 }
 
 function renderAllocationOverview() {
-  if (state.allocationMode === "week") {
-    renderWeeklyOverview();
-  } else {
-    renderDailyOverview();
+  switch (state.allocationMode) {
+    case "week":
+      renderWeeklyOverview();
+      break;
+    case "month":
+      renderMonthlyOverview();
+      break;
+    case "quarter":
+      renderQuarterlyOverview();
+      break;
+    case "day":
+    default:
+      renderDailyOverview();
+      break;
   }
 }
 
 function applyAllocationMode() {
+  const isDayMode = state.allocationMode === "day";
   const isWeekMode = state.allocationMode === "week";
+  const isMonthMode = state.allocationMode === "month";
+  const isQuarterMode = state.allocationMode === "quarter";
+  const isRangeMode = !isDayMode;
 
   if (refs.modeDayBtn) {
-    refs.modeDayBtn.classList.toggle("is-active", !isWeekMode);
+    refs.modeDayBtn.classList.toggle("is-active", isDayMode);
   }
   if (refs.modeWeekBtn) {
     refs.modeWeekBtn.classList.toggle("is-active", isWeekMode);
   }
-  if (refs.selectedDate) {
-    refs.selectedDate.classList.toggle("is-hidden", isWeekMode);
+  if (refs.modeMonthBtn) {
+    refs.modeMonthBtn.classList.toggle("is-active", isMonthMode);
   }
-  if (refs.selectedWeek) {
-    refs.selectedWeek.classList.toggle("is-hidden", !isWeekMode);
+  if (refs.modeQuarterBtn) {
+    refs.modeQuarterBtn.classList.toggle("is-active", isQuarterMode);
+  }
+  if (refs.selectedDate) {
+    refs.selectedDate.classList.toggle("is-hidden", isRangeMode);
+  }
+  if (refs.allocationPeriodControl) {
+    refs.allocationPeriodControl.classList.toggle("is-hidden", !isRangeMode);
   }
   if (refs.weekWrapper) {
-    refs.weekWrapper.classList.toggle("is-hidden", !isWeekMode);
+    refs.weekWrapper.classList.toggle("is-hidden", !isRangeMode);
   }
   if (refs.weekBarsScroll) {
-    refs.weekBarsScroll.classList.toggle("is-hidden", !isWeekMode);
+    refs.weekBarsScroll.classList.toggle("is-hidden", !isRangeMode);
   }
 
-  if (isWeekMode) {
+  if (isRangeMode) {
     refs.timeline.classList.add("is-hidden");
     if (refs.pieWrapper) {
       refs.pieWrapper.classList.add("is-hidden");
@@ -6103,7 +6165,7 @@ function renderTrashPage() {
 function renderDailyOverview() {
   const day = refs.selectedDate.value || state.selectedDate;
   state.selectedDate = day;
-  updateSelectedWeekBadge(day);
+  updateSelectedPeriodBadge(day, "week");
   const dayStart = new Date(`${day}T00:00`);
   // Fixed totalSlots calculation to handle edge cases if SLOT_MINUTES isn't perfectly dividing 24h
   const totalSlots = Math.ceil((24 * 60) / SLOT_MINUTES);
@@ -6200,20 +6262,32 @@ function renderDailyOverview() {
 }
 
 function renderWeeklyOverview() {
+  renderRangeOverview("week");
+}
+
+function renderMonthlyOverview() {
+  renderRangeOverview("month");
+}
+
+function renderQuarterlyOverview() {
+  renderRangeOverview("quarter");
+}
+
+function renderRangeOverview(mode) {
   const day = refs.selectedDate.value || state.selectedDate;
   state.selectedDate = day;
-  updateSelectedWeekBadge(day);
+  updateSelectedPeriodBadge(day, mode);
 
-  const weekStats = computeWeeklyStats(day);
-  refs.summaryUsed.textContent = formatDuration(weekStats.usedMinutes);
-  refs.summaryFree.textContent = formatDuration(weekStats.freeMinutes);
-  renderLegend(weekStats.categoryTotals, weekStats.freeMinutes);
-  renderWeekBars(weekStats.categoryRanking);
+  const period = getAllocationPeriodContext(day, mode);
+  const stats = computeRangeStats(period.range);
+  refs.summaryUsed.textContent = formatDuration(stats.usedMinutes);
+  refs.summaryFree.textContent = formatDuration(stats.freeMinutes);
+  renderLegend(stats.categoryTotals, stats.freeMinutes);
+  renderWeekBars(stats.categoryRanking, period.emptyText);
   applyAllocationMode();
 }
 
-function computeWeeklyStats(day) {
-  const weekRange = getWeekRangeFromDate(day);
+function computeRangeStats(targetRange) {
   const categoryTotals = Object.fromEntries(getCategoryKeys().map((key) => [key, 0]));
   let usedMinutes = 0;
 
@@ -6221,12 +6295,12 @@ function computeWeeklyStats(day) {
     if (isTaskInTrash(task)) {
       return;
     }
-    const range = getTaskRange(task);
-    if (!range) {
+    const taskRange = getTaskRange(task);
+    if (!taskRange) {
       return;
     }
 
-    const overlap = getOverlapMinutes(range.start, range.end, weekRange.start, weekRange.end);
+    const overlap = getOverlapMinutes(taskRange.start, taskRange.end, targetRange.start, targetRange.end);
     if (overlap <= 0) {
       return;
     }
@@ -6247,12 +6321,12 @@ function computeWeeklyStats(day) {
   return {
     categoryRanking,
     usedMinutes,
-    freeMinutes: Math.max(0, 7 * 24 * 60 - usedMinutes),
+    freeMinutes: Math.max(0, Math.round((targetRange.end.getTime() - targetRange.start.getTime()) / 60000) - usedMinutes),
     categoryTotals
   };
 }
 
-function renderWeekBars(categoryRanking) {
+function renderWeekBars(categoryRanking, emptyText = "本周暂无类别时长分配记录") {
   if (!refs.weekBars) {
     return;
   }
@@ -6262,7 +6336,7 @@ function renderWeekBars(categoryRanking) {
   if (!categoryRanking.length) {
     const empty = document.createElement("p");
     empty.className = "week-bars-empty";
-    empty.textContent = "本周暂无类别时长分配记录";
+    empty.textContent = emptyText;
     refs.weekBars.appendChild(empty);
     updateWeekBarsScrollState();
     return;
@@ -6319,6 +6393,67 @@ function getWeekRangeFromDate(dayValue) {
   return { start: monday, end: sundayEnd };
 }
 
+function getMonthRangeFromDate(dayValue) {
+  const base = parseDateTime(`${dayValue}T00:00`) || new Date();
+  const start = new Date(base.getFullYear(), base.getMonth(), 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  end.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+function getQuarterRangeFromDate(dayValue) {
+  const base = parseDateTime(`${dayValue}T00:00`) || new Date();
+  const quarterStartMonth = Math.floor(base.getMonth() / 3) * 3;
+  const start = new Date(base.getFullYear(), quarterStartMonth, 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(base.getFullYear(), quarterStartMonth + 3, 1);
+  end.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+function getQuarterInfo(date) {
+  const quarter = Math.floor(date.getMonth() / 3) + 1;
+  const startMonth = Math.floor(date.getMonth() / 3) * 3 + 1;
+  return {
+    year: date.getFullYear(),
+    quarter,
+    startMonth,
+    endMonth: startMonth + 2
+  };
+}
+
+function getAllocationPeriodContext(dayValue, mode = state.allocationMode) {
+  const base = parseDateTime(`${dayValue}T00:00`) || new Date();
+  if (mode === "month") {
+    const monthRange = getMonthRangeFromDate(dayValue);
+    return {
+      range: monthRange,
+      badgeText: `${base.getMonth() + 1}月`,
+      badgeTitle: `${base.getFullYear()}年${base.getMonth() + 1}月`,
+      emptyText: "本月暂无类别时长分配记录"
+    };
+  }
+  if (mode === "quarter") {
+    const quarterRange = getQuarterRangeFromDate(dayValue);
+    const quarterInfo = getQuarterInfo(base);
+    return {
+      range: quarterRange,
+      badgeText: `第${quarterInfo.quarter}季度`,
+      badgeTitle: `${quarterInfo.year}年第${quarterInfo.quarter}季度（${quarterInfo.startMonth}-${quarterInfo.endMonth}月）`,
+      emptyText: "本季度暂无类别时长分配记录"
+    };
+  }
+  const weekRange = getWeekRangeFromDate(dayValue);
+  const weekInfo = getIsoWeekInfo(base);
+  return {
+    range: weekRange,
+    badgeText: `第${weekInfo.week}周`,
+    badgeTitle: `${weekInfo.year}年第${weekInfo.week}周`,
+    emptyText: "本周暂无类别时长分配记录"
+  };
+}
+
 function bindWeekBarsScrollEvents() {
   if (!refs.weekBars || !refs.weekBarsScrollRange) {
     return;
@@ -6359,15 +6494,13 @@ function updateWeekBarsScrollState() {
   refs.weekBarsScroll.classList.remove("is-hidden");
 }
 
-function updateSelectedWeekBadge(dayValue) {
+function updateSelectedPeriodBadge(dayValue, mode = state.allocationMode) {
   if (!refs.selectedWeek) {
     return;
   }
-
-  const base = parseDateTime(`${dayValue}T00:00`) || new Date();
-  const weekInfo = getIsoWeekInfo(base);
-  refs.selectedWeek.textContent = `第${weekInfo.week}周`;
-  refs.selectedWeek.title = `${weekInfo.year}年第${weekInfo.week}周`;
+  const period = getAllocationPeriodContext(dayValue, mode);
+  refs.selectedWeek.textContent = period.badgeText;
+  refs.selectedWeek.title = period.badgeTitle;
 }
 
 function getIsoWeekInfo(date) {

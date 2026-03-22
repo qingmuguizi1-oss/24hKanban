@@ -781,11 +781,13 @@ button.danger {
   color: #fff6e8;
 }
 
-#allocation-date-label {
+#allocation-date-container {
   min-width: 188px;
+  display: flex;
+  align-items: center;
 }
 
-#allocation-date-label input,
+#allocation-date-container input,
 .selected-week {
   min-width: 188px;
 }
@@ -1149,7 +1151,7 @@ button.danger {
 
 .category-manager-item {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 164px auto;
+  grid-template-columns: 42px minmax(0, 1fr) 174px auto;
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -1185,10 +1187,10 @@ button.danger {
 
 .category-manager-key-wrap {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   justify-self: end;
-  width: 164px;
+  width: 174px;
   gap: 6px;
 }
 
@@ -1198,12 +1200,13 @@ button.danger {
   color: #7a5b45;
   border-radius: 8px;
   height: 24px;
-  min-width: 24px;
+  min-width: 32px;
   padding: 0 6px;
   line-height: 1;
   font-size: 0.82rem;
   cursor: grab;
   justify-self: center;
+  white-space: nowrap;
 }
 
 .category-manager-drag-handle:active {
@@ -1426,6 +1429,40 @@ button.danger {
 
 .bedtime-review-week-tools #bedtime-review-back-btn {
   margin-left: auto;
+}
+
+.period-control {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 248, 235, 0.9);
+  overflow: hidden;
+}
+
+.period-control .selected-week {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  min-width: 110px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.period-control .icon-btn {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 42px;
+  padding: 0 12px;
+  color: #6a4b35;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.period-control .icon-btn:hover {
+  background: rgba(214, 171, 126, 0.22);
 }
 
 .bedtime-review-page .summary-row {
