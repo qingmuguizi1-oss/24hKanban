@@ -188,22 +188,21 @@
           </label>
         </div>
 
-        <label>
-          任务详情（选填）
+        <label class="task-detail-field">
+          <span class="field-label-inline">
+            <span>任务详情（选填）</span>
+            <small id="detail-count">0/300</small>
+          </span>
           <textarea id="task-detail" maxlength="300" rows="5" placeholder="简要描述目标、输出和限制条件"></textarea>
-          <small id="detail-count">0/300</small>
         </label>
 
-        <div class="two-col">
-          <label>
-            开始时间
-            <input id="task-start" type="datetime-local" required>
-          </label>
-          <label>
-            结束时间
-            <input id="task-end" type="datetime-local" required>
-          </label>
-        </div>
+        <section class="task-session-block" aria-label="任务时段">
+          <div class="task-session-head">
+            <span class="task-session-title">任务时段（可多次）</span>
+            <button id="add-task-session" type="button" class="secondary task-session-add-btn">+ 新增一次</button>
+          </div>
+          <div id="task-session-list" class="task-session-list"></div>
+        </section>
 
         <div class="two-col">
           <div class="category-group">
@@ -355,14 +354,21 @@
   <section id="task-category-page" class="app task-category-page is-hidden" aria-hidden="true">
     <header class="app-header task-category-header">
       <h1>任务分类</h1>
-      <p>按天查看你的 7 个重点任务大类，卡片数据与“每日24h分配”保持同步。</p>
+      <p>按天或按周查看你的 8 个重点任务大类，卡片数据与“每日24h分配”保持同步。</p>
     </header>
 
     <section class="panel">
       <div class="panel-head">
         <h2>分类投入</h2>
         <div class="head-tools task-category-tools">
-          <label id="task-category-page-date-label"><input id="task-category-page-date" type="date" aria-label="查看日期"></label>
+          <div id="task-category-mode-switch" class="view-switch" role="group" aria-label="分类投入时间范围">
+            <button type="button" id="task-category-mode-day" class="switch-btn is-active">天</button>
+            <button type="button" id="task-category-mode-week" class="switch-btn">周</button>
+          </div>
+          <label id="task-category-page-date-label">
+            <input id="task-category-page-date" type="date" aria-label="查看日期">
+            <span id="task-category-selected-week" class="selected-week is-hidden">第--周</span>
+          </label>
           <button id="task-category-page-back-btn" type="button" class="secondary">返回看板</button>
         </div>
       </div>
@@ -413,7 +419,7 @@
     </div>
   </div>
 
-  <template id="task-card-template">
+    <template id="task-card-template">
     <article class="task-card is-collapsed">
       <div class="task-card-head">
         <div class="card-title-wrap">
@@ -447,7 +453,22 @@
         </div>
       </div>
     </article>
-  </template>
+    </template>
+
+    <template id="task-session-row-template">
+      <div class="task-session-row">
+        <span class="task-session-index">第1次</span>
+        <label class="task-session-field">
+          <span>开始时间</span>
+          <input class="task-session-start" type="datetime-local" required>
+        </label>
+        <label class="task-session-field">
+          <span>结束时间</span>
+          <input class="task-session-end" type="datetime-local" required>
+        </label>
+        <button type="button" class="secondary task-session-remove-btn">删除</button>
+      </div>
+    </template>
 
   <canvas id="completion-confetti-canvas" aria-hidden="true"></canvas>
   <audio id="fixed-task-completion-sound" src="sounds/completion-fixed.wav" preload="auto"></audio>

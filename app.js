@@ -127,6 +127,7 @@ const TASK_CATEGORY_PLANNED_MINUTES_BY_KEY = Object.freeze({
   explore: 120,
   topic: 60,
   study: 120,
+  sport: 60,
   dev: 180,
   inspiration: 0,
   record: 60
@@ -206,6 +207,19 @@ const TASK_CATEGORY_GROUPS = [
     ]
   },
   {
+    key: "sport",
+    label: "\u8FD0\u52A8",
+    icon: "\uD83C\uDFC3",
+    description: "\u4EE5\u4F53\u80FD\u3001\u529B\u91CF\u4E0E\u6062\u590D\u4E3A\u6838\u5FC3\u7684\u8EAB\u4F53\u6295\u5165",
+    subcategories: [
+      { key: "cardio", label: "\u6709\u6C27", keywords: ["\u8DD1\u6B65", "\u6709\u6C27", "\u5FC3\u80BA", "\u6162\u8DD1", "\u5FEB\u8D70"] },
+      { key: "strength", label: "\u529B\u91CF", keywords: ["\u529B\u91CF", "\u589E\u808C", "\u8BAD\u7EC3", "\u4E3E\u94C1", "\u5668\u68B0"] },
+      { key: "mobility", label: "\u62C9\u4F38", keywords: ["\u62C9\u4F38", "\u67D4\u97E7", "\u70ED\u8EAB", "\u653E\u677E", "\u6536\u64CD"] },
+      { key: "ball", label: "\u7403\u7C7B", keywords: ["\u7403", "\u7BEE\u7403", "\u8DB3\u7403", "\u7F51\u7403", "\u7FBD\u6BDB\u7403"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
     key: "inspiration",
     label: "\u7075\u611F",
     icon: "\uD83D\uDCA1",
@@ -280,6 +294,7 @@ const state = {
   boardDate: toDateInputValue(new Date()),
   bedtimeReviewDate: toDateInputValue(new Date()),
   taskCategoryDate: toDateInputValue(new Date()),
+  taskCategoryMode: "day",
   activePage: "dashboard",
   voiceEffectsEnabled: true,
   optionalTagMode: DEFAULT_OPTIONAL_TAG_MODE,
@@ -325,8 +340,9 @@ const refs = {
   taskProcessScore: document.getElementById("task-process-score"),
   taskDetail: document.getElementById("task-detail"),
   detailCount: document.getElementById("detail-count"),
-  taskStart: document.getElementById("task-start"),
-  taskEnd: document.getElementById("task-end"),
+  taskSessionList: document.getElementById("task-session-list"),
+  addTaskSessionBtn: document.getElementById("add-task-session"),
+  taskSessionRowTemplate: document.getElementById("task-session-row-template"),
   taskCategoryGroup: document.getElementById("task-category-group"),
   taskCategoryPicker: document.getElementById("task-category-picker"),
   taskCategorySummary: document.getElementById("task-category-summary"),
@@ -353,7 +369,10 @@ const refs = {
   bedtimeReviewSummary: document.getElementById("bedtime-review-summary"),
   bedtimeReviewGroups: document.getElementById("bedtime-review-groups"),
   bedtimeReviewBackBtn: document.getElementById("bedtime-review-back-btn"),
+  taskCategoryModeDayBtn: document.getElementById("task-category-mode-day"),
+  taskCategoryModeWeekBtn: document.getElementById("task-category-mode-week"),
   taskCategoryDate: document.getElementById("task-category-page-date"),
+  taskCategorySelectedWeek: document.getElementById("task-category-selected-week"),
   taskCategorySummaryPanel: document.getElementById("task-category-page-summary"),
   taskCategoryCards: document.getElementById("task-category-page-cards"),
   taskCategoryBackBtn: document.getElementById("task-category-page-back-btn"),
@@ -484,12 +503,14 @@ function init() {
   bindOptionalTagSwitch();
   bindCategoryManagerEvents();
 
-  if (refs.taskStart && refs.taskEnd) {
-    refs.taskStart.addEventListener("input", updateDurationPreview);
-    refs.taskEnd.addEventListener("input", updateDurationPreview);
-    bindDateTimePickerInteractions([refs.taskStart, refs.taskEnd]);
-  } else {
-    console.warn("Missing #task-start or #task-end fields in form.");
+  initTaskSessionForm();
+  if (refs.addTaskSessionBtn) {
+    refs.addTaskSessionBtn.addEventListener("click", () => {
+      createTaskSessionRow();
+      renumberTaskSessionRows();
+      updateDurationPreview();
+      persistTaskFormDraft();
+    });
   }
   renderCategoryChecklist();
   if (refs.taskCategoryPicker) {
@@ -525,6 +546,16 @@ function init() {
       }
       renderAllocationOverview();
       renderTaskCategoryPage();
+    });
+  }
+  if (refs.taskCategoryModeDayBtn) {
+    refs.taskCategoryModeDayBtn.addEventListener("click", () => {
+      setTaskCategoryMode("day");
+    });
+  }
+  if (refs.taskCategoryModeWeekBtn) {
+    refs.taskCategoryModeWeekBtn.addEventListener("click", () => {
+      setTaskCategoryMode("week");
     });
   }
   if (refs.bedtimeReviewPrevWeekBtn) {
@@ -2193,6 +2224,155 @@ function bindTaskFormDraftPersistence() {
   refs.form.addEventListener("change", persistTaskFormDraft);
 }
 
+function getTaskSessionRows() {
+  if (!refs.taskSessionList) {
+    return [];
+  }
+  return Array.from(refs.taskSessionList.querySelectorAll(".task-session-row"));
+}
+
+function createTaskSessionRow(session = {}) {
+  if (!refs.taskSessionList) {
+    return null;
+  }
+
+  let row = null;
+  if (
+    refs.taskSessionRowTemplate
+    && refs.taskSessionRowTemplate.content
+    && refs.taskSessionRowTemplate.content.firstElementChild
+  ) {
+    row = refs.taskSessionRowTemplate.content.firstElementChild.cloneNode(true);
+  }
+
+  if (!row) {
+    row = document.createElement("div");
+    row.className = "task-session-row";
+    row.innerHTML = `
+      <span class="task-session-index">第1次</span>
+      <label class="task-session-field">
+        <span>开始时间</span>
+        <input class="task-session-start" type="datetime-local" required>
+      </label>
+      <label class="task-session-field">
+        <span>结束时间</span>
+        <input class="task-session-end" type="datetime-local" required>
+      </label>
+      <button type="button" class="secondary task-session-remove-btn">删除</button>
+    `;
+  }
+
+  const startInput = row.querySelector(".task-session-start");
+  const endInput = row.querySelector(".task-session-end");
+  const removeBtn = row.querySelector(".task-session-remove-btn");
+
+  if (startInput) {
+    startInput.value = normalizeDateTimeInput(session.startAt || "");
+    startInput.addEventListener("input", updateDurationPreview);
+  }
+  if (endInput) {
+    endInput.value = normalizeDateTimeInput(session.endAt || "");
+    endInput.addEventListener("input", updateDurationPreview);
+  }
+  bindDateTimePickerInteractions([startInput, endInput]);
+
+  if (removeBtn) {
+    removeBtn.addEventListener("click", () => {
+      const rows = getTaskSessionRows();
+      if (rows.length <= 1) {
+        if (startInput) {
+          startInput.value = "";
+        }
+        if (endInput) {
+          endInput.value = "";
+        }
+      } else {
+        row.remove();
+      }
+      renumberTaskSessionRows();
+      updateDurationPreview();
+      persistTaskFormDraft();
+    });
+  }
+
+  refs.taskSessionList.appendChild(row);
+  return row;
+}
+
+function renumberTaskSessionRows() {
+  getTaskSessionRows().forEach((row, index) => {
+    const label = row.querySelector(".task-session-index");
+    if (label) {
+      label.textContent = `第${index + 1}次`;
+    }
+  });
+}
+
+function clearTaskSessionRows() {
+  if (!refs.taskSessionList) {
+    return;
+  }
+  refs.taskSessionList.innerHTML = "";
+}
+
+function setTaskSessionsToForm(sessions) {
+  if (!refs.taskSessionList) {
+    return;
+  }
+  clearTaskSessionRows();
+  const source = Array.isArray(sessions) ? sessions : [];
+  const normalizedForForm = source
+    .map((session) => ({
+      startAt: normalizeDateTimeInput(session && session.startAt ? session.startAt : ""),
+      endAt: normalizeDateTimeInput(session && session.endAt ? session.endAt : "")
+    }))
+    .filter((session) => session.startAt || session.endAt);
+
+  if (!normalizedForForm.length) {
+    const normalized = normalizeTaskSessions(sessions);
+    if (!normalized.length) {
+      createTaskSessionRow();
+    } else {
+      normalized.forEach((session) => {
+        createTaskSessionRow(session);
+      });
+    }
+  } else {
+    normalizedForForm.forEach((session) => {
+      createTaskSessionRow(session);
+    });
+  }
+  if (!getTaskSessionRows().length) {
+    createTaskSessionRow();
+  }
+  renumberTaskSessionRows();
+}
+
+function getTaskSessionsFromFormRaw() {
+  return getTaskSessionRows().map((row) => {
+    const startInput = row.querySelector(".task-session-start");
+    const endInput = row.querySelector(".task-session-end");
+    return {
+      startAt: normalizeDateTimeInput(startInput ? startInput.value : ""),
+      endAt: normalizeDateTimeInput(endInput ? endInput.value : "")
+    };
+  });
+}
+
+function getTaskSessionsFromForm() {
+  return normalizeTaskSessions(getTaskSessionsFromFormRaw());
+}
+
+function initTaskSessionForm() {
+  if (!refs.taskSessionList) {
+    return;
+  }
+  if (!getTaskSessionRows().length) {
+    createTaskSessionRow();
+  }
+  renumberTaskSessionRows();
+}
+
 function restoreTaskFormDraft() {
   const draft = loadTaskFormDraft();
   if (!draft) {
@@ -2212,10 +2392,10 @@ function restoreTaskFormDraft() {
   handlePriorityChange();
   refs.taskDetail.value = typeof draft.detail === "string" ? draft.detail.slice(0, 300) : "";
 
-  if (refs.taskStart && refs.taskEnd) {
-    refs.taskStart.value = normalizeDateTimeInput(draft.startAt || "");
-    refs.taskEnd.value = normalizeDateTimeInput(draft.endAt || "");
-  }
+  const draftSessions = Array.isArray(draft.sessions) && draft.sessions.length
+    ? draft.sessions
+    : [{ startAt: draft.startAt || "", endAt: draft.endAt || "" }];
+  setTaskSessionsToForm(draftSessions);
 
   const draftCategories = Array.isArray(draft.categories) ? draft.categories : [];
   setSelectedCategoriesToForm(draftCategories);
@@ -2254,6 +2434,10 @@ function persistTaskFormDraft() {
     const categories = getSelectedCategoriesFromForm();
     const subcategories = getSelectedTaskSubcategoriesFromForm();
     const subcategoryDetails = getSelectedTaskSubcategoryDetailsFromForm();
+    const sessions = getTaskSessionsFromFormRaw();
+    const normalizedSessions = normalizeTaskSessions(sessions);
+    const firstSession = normalizedSessions[0] || { startAt: "", endAt: "" };
+    const lastSession = normalizedSessions[normalizedSessions.length - 1] || { startAt: "", endAt: "" };
     const draft = {
       taskId: refs.taskId.value || "",
       name: refs.taskName.value || "",
@@ -2266,8 +2450,9 @@ function persistTaskFormDraft() {
       processScore: getSelectedProcessScoreFromForm(),
       optionalTagMode: state.optionalTagMode === "process" ? "process" : "mood",
       detail: refs.taskDetail.value || "",
-      startAt: refs.taskStart ? normalizeDateTimeInput(refs.taskStart.value) : "",
-      endAt: refs.taskEnd ? normalizeDateTimeInput(refs.taskEnd.value) : "",
+      sessions,
+      startAt: firstSession.startAt,
+      endAt: lastSession.endAt,
       categories,
       subcategories,
       subcategoryDetails,
@@ -2323,13 +2508,121 @@ function parseDateTime(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function normalizeTaskSessions(sessions, fallbackStartAt = "", fallbackEndAt = "") {
+  const source = Array.isArray(sessions) && sessions.length
+    ? sessions
+    : [{ startAt: fallbackStartAt, endAt: fallbackEndAt }];
+
+  const normalized = source
+    .map((session) => {
+      const startAt = normalizeDateTimeInput(session && session.startAt ? session.startAt : "");
+      const endAt = normalizeDateTimeInput(session && session.endAt ? session.endAt : "");
+      if (!startAt || !endAt) {
+        return null;
+      }
+      if (getDurationMinutes(startAt, endAt) <= 0) {
+        return null;
+      }
+      return { startAt, endAt };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      const leftStart = parseDateTime(left.startAt);
+      const rightStart = parseDateTime(right.startAt);
+      const leftTs = leftStart ? leftStart.getTime() : Number.MAX_SAFE_INTEGER;
+      const rightTs = rightStart ? rightStart.getTime() : Number.MAX_SAFE_INTEGER;
+      if (leftTs !== rightTs) {
+        return leftTs - rightTs;
+      }
+      const leftEnd = parseDateTime(left.endAt);
+      const rightEnd = parseDateTime(right.endAt);
+      const leftEndTs = leftEnd ? leftEnd.getTime() : Number.MAX_SAFE_INTEGER;
+      const rightEndTs = rightEnd ? rightEnd.getTime() : Number.MAX_SAFE_INTEGER;
+      return leftEndTs - rightEndTs;
+    });
+
+  return normalized;
+}
+
+function getTaskSessions(task) {
+  if (!task || typeof task !== "object") {
+    return [];
+  }
+  return normalizeTaskSessions(task.sessions, task.startAt, task.endAt);
+}
+
+function getTaskRanges(task) {
+  const sessions = getTaskSessions(task);
+  let offsetMinutes = 0;
+
+  return sessions
+    .map((session) => {
+      const start = parseDateTime(session.startAt);
+      const end = parseDateTime(session.endAt);
+      if (!start || !end || end <= start) {
+        return null;
+      }
+      const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        return null;
+      }
+      const range = {
+        start,
+        end,
+        startAt: session.startAt,
+        endAt: session.endAt,
+        durationMinutes,
+        offsetMinutes
+      };
+      offsetMinutes += durationMinutes;
+      return range;
+    })
+    .filter(Boolean);
+}
+
 function getTaskRange(task) {
-  const start = parseDateTime(task.startAt);
-  const end = parseDateTime(task.endAt);
-  if (!start || !end || end <= start) {
+  const ranges = getTaskRanges(task);
+  if (!ranges.length) {
     return null;
   }
-  return { start, end };
+  return {
+    start: ranges[0].start,
+    end: ranges[ranges.length - 1].end
+  };
+}
+
+function iterateTaskOverlapChunks(task, targetStart, targetEnd, callback) {
+  if (
+    !(targetStart instanceof Date)
+    || !(targetEnd instanceof Date)
+    || Number.isNaN(targetStart.getTime())
+    || Number.isNaN(targetEnd.getTime())
+    || targetEnd <= targetStart
+    || typeof callback !== "function"
+  ) {
+    return;
+  }
+
+  const ranges = getTaskRanges(task);
+  ranges.forEach((range) => {
+    const overlapStartTs = Math.max(range.start.getTime(), targetStart.getTime());
+    const overlapEndTs = Math.min(range.end.getTime(), targetEnd.getTime());
+    if (overlapEndTs <= overlapStartTs) {
+      return;
+    }
+    const overlapMinutes = Math.round((overlapEndTs - overlapStartTs) / 60000);
+    if (!Number.isFinite(overlapMinutes) || overlapMinutes <= 0) {
+      return;
+    }
+    const elapsedBeforeOverlap = range.offsetMinutes + ((overlapStartTs - range.start.getTime()) / 60000);
+    callback({
+      range,
+      overlapStart: new Date(overlapStartTs),
+      overlapEnd: new Date(overlapEndTs),
+      overlapMinutes,
+      elapsedBeforeOverlapMinutes: elapsedBeforeOverlap
+    });
+  });
 }
 
 function normalizeMinutesInputValue(value) {
@@ -2432,7 +2725,7 @@ function getTaskDurationMinutes(task) {
   if (!task || typeof task !== "object") {
     return 0;
   }
-  return getDurationMinutes(task.startAt, task.endAt);
+  return getTaskRanges(task).reduce((sum, range) => sum + range.durationMinutes, 0);
 }
 
 function sanitizeTaskCategoryAllocations(categoryAllocations, categoryKeys, totalMinutes) {
@@ -2839,10 +3132,8 @@ function sanitizeTaskSubcategoryAllocationInputs(
 }
 
 function getTaskDurationMinutesFromForm() {
-  if (!refs.taskStart || !refs.taskEnd) {
-    return 0;
-  }
-  return Math.max(0, getDurationMinutes(refs.taskStart.value, refs.taskEnd.value));
+  const sessions = getTaskSessionsFromForm();
+  return sessions.reduce((sum, session) => sum + getDurationMinutes(session.startAt, session.endAt), 0);
 }
 
 function ensureCategoryAllocationInputDefaults(selectedKeys, totalMinutes) {
@@ -4257,9 +4548,17 @@ function normalizeTask(input) {
   );
   const normalizedCategories = categories.length ? categories : [getDefaultCategoryKey()];
 
-  const startAt = normalizeDateTimeInput(input.startAt || input.start || "");
-  const endAt = normalizeDateTimeInput(input.endAt || input.end || "");
-  const durationMinutes = getDurationMinutes(startAt, endAt);
+  const sessions = normalizeTaskSessions(
+    input.sessions,
+    input.startAt || input.start || "",
+    input.endAt || input.end || ""
+  );
+  const startAt = sessions.length ? sessions[0].startAt : "";
+  const endAt = sessions.length ? sessions[sessions.length - 1].endAt : "";
+  const durationMinutes = sessions.reduce(
+    (sum, session) => sum + getDurationMinutes(session.startAt, session.endAt),
+    0
+  );
   const status = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, input.status) ? input.status : "todo";
   const priority = PRIORITY_MAP[input.priority] ? input.priority : "important_not_urgent";
   const optionalTagTouched = input.optionalTagTouched === true;
@@ -4313,6 +4612,7 @@ function normalizeTask(input) {
     detail: String(input.detail || "").trim(),
     startAt,
     endAt,
+    sessions,
     categories: normalizedCategories,
     categoryAllocations,
     subcategories,
@@ -4821,6 +5121,29 @@ function onSubmitTask(event) {
   const selectedProcess = getSelectedProcessFromForm();
   const existingTask = state.tasks.find((item) => item.id === refs.taskId.value);
   const shouldCelebrateCompletion = Boolean(existingTask && existingTask.status !== "done" && refs.taskStatus.value === "done");
+  const rawSessions = getTaskSessionsFromFormRaw();
+  const hasAnySessionInput = rawSessions.some((session) => session.startAt || session.endAt);
+  const hasIncompleteSession = rawSessions.some((session) => {
+    const hasStart = Boolean(session.startAt);
+    const hasEnd = Boolean(session.endAt);
+    return (hasStart || hasEnd) && (!hasStart || !hasEnd);
+  });
+  const hasInvalidDurationSession = rawSessions.some((session) => (
+    session.startAt
+    && session.endAt
+    && getDurationMinutes(session.startAt, session.endAt) <= 0
+  ));
+  const sessions = normalizeTaskSessions(rawSessions);
+  const hasSessionOverlap = sessions.some((session, index) => {
+    if (index === 0) {
+      return false;
+    }
+    const prevEnd = parseDateTime(sessions[index - 1].endAt);
+    const currentStart = parseDateTime(session.startAt);
+    return Boolean(prevEnd && currentStart && currentStart < prevEnd);
+  });
+  const firstSession = sessions[0] || { startAt: "", endAt: "" };
+  const lastSession = sessions[sessions.length - 1] || firstSession;
   const task = {
     id: refs.taskId.value || createTaskId(),
     name: refs.taskName.value.trim(),
@@ -4834,8 +5157,9 @@ function onSubmitTask(event) {
     optionalTagTouched: Boolean(selectedMood || selectedProcess),
     autoUrgentEscalation: false,
     detail: refs.taskDetail.value.trim(),
-    startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
-    endAt: normalizeDateTimeInput(refs.taskEnd ? refs.taskEnd.value : ""),
+    startAt: firstSession.startAt,
+    endAt: lastSession.endAt,
+    sessions,
     categories,
     subcategories: taskSubcategories,
     subcategoryDetails: getSelectedTaskSubcategoryDetailsFromForm(),
@@ -4869,16 +5193,27 @@ function onSubmitTask(event) {
     return;
   }
 
-  if (!task.startAt || !task.endAt) {
+  if (!hasAnySessionInput) {
     alert("\u8BF7\u586B\u5199\u5F00\u59CB\u548C\u7ED3\u675F\u65F6\u95F4\u3002");
     return;
   }
 
-  const duration = getDurationMinutes(task.startAt, task.endAt);
-  if (duration <= 0) {
+  if (hasIncompleteSession) {
+    alert("\u8BF7\u786E\u4FDD\u6BCF\u4E2A\u65F6\u6BB5\u90FD\u540C\u65F6\u586B\u5199\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002");
+    return;
+  }
+
+  if (hasInvalidDurationSession || !task.sessions.length) {
     alert("\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002");
     return;
   }
+
+  if (hasSessionOverlap) {
+    alert("\u540C\u4E00\u4EFB\u52A1\u7684\u591A\u6B21\u65F6\u6BB5\u4E0D\u80FD\u91CD\u53E0\u3002");
+    return;
+  }
+
+  const duration = getTaskDurationMinutes(task);
 
   const categoryAllocationResult = getTaskCategoryAllocationsForSubmit(task.categories, duration);
   if (!categoryAllocationResult.allocations) {
@@ -4933,6 +5268,7 @@ function resetForm() {
   setSelectedTaskSubcategoriesToForm({});
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
+  setTaskSessionsToForm([]);
   if (refs.taskCategoryPicker) {
     refs.taskCategoryPicker.open = false;
   }
@@ -4946,10 +5282,10 @@ function updateDetailCount() {
 }
 
 function updateDurationPreview() {
-  if (!refs.taskStart || !refs.taskEnd || !refs.durationPreview) {
+  if (!refs.durationPreview) {
     return;
   }
-  const minutes = getDurationMinutes(refs.taskStart.value, refs.taskEnd.value);
+  const minutes = getTaskDurationMinutesFromForm();
   refs.durationPreview.textContent = minutes > 0 ? formatDuration(minutes) : "--";
   renderCategorySummary();
 }
@@ -5041,12 +5377,21 @@ function renderBedtimeReview() {
     if (isTaskInTrash(task)) {
       return;
     }
-    const range = getTaskRange(task);
-    if (!range) {
-      return;
-    }
-    const overlap = getOverlapMinutes(range.start, range.end, weekRange.start, weekRange.end);
-    if (overlap <= 0) {
+    const overlappedDayKeys = new Set();
+    let hasWeekOverlap = false;
+    iterateTaskOverlapChunks(task, weekRange.start, weekRange.end, ({ overlapStart, overlapEnd, overlapMinutes }) => {
+      if (overlapMinutes <= 0) {
+        return;
+      }
+      hasWeekOverlap = true;
+      weekDays.forEach((day) => {
+        const dayOverlap = getOverlapMinutes(overlapStart, overlapEnd, day.start, day.end);
+        if (dayOverlap > 0) {
+          overlappedDayKeys.add(day.key);
+        }
+      });
+    });
+    if (!hasWeekOverlap) {
       return;
     }
 
@@ -5066,12 +5411,11 @@ function renderBedtimeReview() {
     }
     totalRiskCount += 1;
 
-    weekDays.forEach((day) => {
-      const dayOverlap = getOverlapMinutes(range.start, range.end, day.start, day.end);
-      if (dayOverlap <= 0) {
+    overlappedDayKeys.forEach((dayKey) => {
+      if (!entriesByDay[dayKey]) {
         return;
       }
-      entriesByDay[day.key].push({ task, reasons });
+      entriesByDay[dayKey].push({ task, reasons });
     });
   });
 
@@ -5138,7 +5482,7 @@ function renderBedtimeReview() {
 
       const meta = document.createElement("p");
       meta.className = "bedtime-review-meta";
-      meta.textContent = `${formatCardTimeRange(entry.task.startAt, entry.task.endAt)} | ${getCategoryLabels(entry.task)} | ${formatDuration(getDurationMinutes(entry.task.startAt, entry.task.endAt))}`;
+      meta.textContent = `${formatTaskCardTimeRange(entry.task)} | ${getCategoryLabels(entry.task)} | ${formatDuration(getTaskDurationMinutes(entry.task))}`;
 
       const tags = document.createElement("div");
       tags.className = "bedtime-review-tags";
@@ -5180,6 +5524,55 @@ function getTaskCategoryDateValue() {
   return normalizeDateInputValue(raw);
 }
 
+function setTaskCategoryMode(mode) {
+  if (mode !== "day" && mode !== "week") {
+    return;
+  }
+  state.taskCategoryMode = mode;
+  renderTaskCategoryPage();
+}
+
+function applyTaskCategoryMode(dayValue) {
+  const isWeekMode = state.taskCategoryMode === "week";
+  if (refs.taskCategoryModeDayBtn) {
+    refs.taskCategoryModeDayBtn.classList.toggle("is-active", !isWeekMode);
+  }
+  if (refs.taskCategoryModeWeekBtn) {
+    refs.taskCategoryModeWeekBtn.classList.toggle("is-active", isWeekMode);
+  }
+  if (refs.taskCategoryDate) {
+    refs.taskCategoryDate.classList.toggle("is-hidden", isWeekMode);
+  }
+  if (refs.taskCategorySelectedWeek) {
+    refs.taskCategorySelectedWeek.classList.toggle("is-hidden", !isWeekMode);
+    if (isWeekMode) {
+      const base = parseDateTime(`${dayValue}T00:00`) || new Date();
+      const weekInfo = getIsoWeekInfo(base);
+      refs.taskCategorySelectedWeek.textContent = `第${weekInfo.week}周`;
+      refs.taskCategorySelectedWeek.title = `${weekInfo.year}年第${weekInfo.week}周`;
+    }
+  }
+}
+
+function getTaskCategoryPeriodContext(day, mode = state.taskCategoryMode) {
+  if (mode === "week") {
+    return {
+      mode: "week",
+      range: getWeekRangeFromDate(day),
+      mainlineLabel: "本周主线"
+    };
+  }
+  const dayStart = new Date(`${day}T00:00`);
+  return {
+    mode: "day",
+    range: {
+      start: dayStart,
+      end: new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
+    },
+    mainlineLabel: "今日主线"
+  };
+}
+
 function renderTaskCategoryPage() {
   if (!refs.taskCategorySummaryPanel || !refs.taskCategoryCards || !refs.taskCategoryDate) {
     return;
@@ -5188,19 +5581,29 @@ function renderTaskCategoryPage() {
   const day = getTaskCategoryDateValue();
   state.taskCategoryDate = day;
   refs.taskCategoryDate.value = day;
+  applyTaskCategoryMode(day);
 
-  const stats = computeTaskCategoryStats(day);
+  const stats = computeTaskCategoryStats(day, getTaskCategoryPeriodContext(day));
   renderTaskCategorySummary(stats);
   renderTaskCategoryCards(stats.groups);
 }
 
-function computeTaskCategoryStats(day) {
-  const dayStart = new Date(`${day}T00:00`);
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+function computeTaskCategoryStats(day, periodContext = getTaskCategoryPeriodContext(day)) {
+  const targetRange = periodContext && periodContext.range
+    ? periodContext.range
+    : getTaskCategoryPeriodContext(day, "day").range;
   const groups = getTaskCategoryGroups().map((group) => ({
     ...group,
     totalMinutes: 0,
-    subcategoryTotals: Object.fromEntries(group.subcategories.map((item) => [item.key, 0]))
+    subcategoryTotals: Object.fromEntries(group.subcategories.map((item) => [item.key, 0])),
+    subcategoryDetailTotals: Object.fromEntries(
+      group.subcategories.map((item) => [
+        item.key,
+        Object.fromEntries(
+          getTaskSubcategoryDetailsByKeys(group.key, item.key).map((detail) => [detail.key, 0])
+        )
+      ])
+    )
   }));
   const trackedGroupKeys = new Set(groups.map((group) => group.key));
 
@@ -5210,21 +5613,8 @@ function computeTaskCategoryStats(day) {
     if (isTaskInTrash(task)) {
       return;
     }
-    const range = getTaskRange(task);
-    if (!range) {
-      return;
-    }
-
-    const overlap = getOverlapMinutes(range.start, range.end, dayStart, dayEnd);
-    if (overlap <= 0) {
-      return;
-    }
-
     const taskCategories = getTaskCategories(task);
     const taskCategoryAllocations = getTaskCategoryAllocations(task);
-    const overlapStartMs = Math.max(range.start.getTime(), dayStart.getTime());
-    const elapsedBeforeOverlap = (overlapStartMs - range.start.getTime()) / 60000;
-    const overlapCategoryAllocations = getTaskCategoryOverlapAllocations(task, overlap, elapsedBeforeOverlap);
     const categoryOffsets = {};
     let categoryCursor = 0;
     taskCategories.forEach((categoryKey) => {
@@ -5237,76 +5627,137 @@ function computeTaskCategoryStats(day) {
     });
     const taskText = `${task.name || ""} ${task.detail || ""}`;
 
-    groups.forEach((group) => {
-      if (!trackedGroupKeys.has(group.key)) {
+    iterateTaskOverlapChunks(task, targetRange.start, targetRange.end, ({ overlapMinutes, elapsedBeforeOverlapMinutes }) => {
+      if (overlapMinutes <= 0) {
         return;
       }
+      const overlapCategoryAllocations = getTaskCategoryOverlapAllocations(
+        task,
+        overlapMinutes,
+        elapsedBeforeOverlapMinutes
+      );
 
-      const categoryTotalMinutes = Math.max(0, Number(taskCategoryAllocations[group.key]) || 0);
-      const share = Math.max(0, Number(overlapCategoryAllocations[group.key]) || 0);
-      if (share <= 0) {
-        return;
-      }
-      group.totalMinutes += share;
-      usedMinutes += share;
-
-      const selectedSubcategories = getTaskSubcategoriesForGroup(task, group.key);
-      const matchedSubcategories = selectedSubcategories.length
-        ? selectedSubcategories
-        : matchTaskSubcategories(group, taskText);
-      const fallbackKey = getTaskCategoryFallbackKey(group);
-      const targets = matchedSubcategories.length
-        ? matchedSubcategories
-        : (fallbackKey ? [fallbackKey] : []);
-      if (!targets.length) {
-        return;
-      }
-
-      if (selectedSubcategories.length && categoryTotalMinutes > 0) {
-        const sourceGroupAllocations = task
-          && task.subcategoryAllocations
-          && typeof task.subcategoryAllocations === "object"
-          && task.subcategoryAllocations[group.key]
-          && typeof task.subcategoryAllocations[group.key] === "object"
-          ? task.subcategoryAllocations[group.key]
-          : {};
-        const normalizedSubcategoryTotals = normalizeMinuteAllocationMap(
-          sourceGroupAllocations,
-          selectedSubcategories,
-          categoryTotalMinutes
-        );
-        const categoryOffset = categoryOffsets[group.key];
-        const categoryStart = categoryOffset ? categoryOffset.start : 0;
-        const overlapStartInTask = elapsedBeforeOverlap;
-        const overlapEndInTask = elapsedBeforeOverlap + overlap;
-        const categoryStartInTask = categoryStart;
-        const categoryEndInTask = categoryStartInTask + categoryTotalMinutes;
-        const categoryOverlapStartInTask = Math.max(overlapStartInTask, categoryStartInTask);
-        const categoryOverlapEndInTask = Math.min(overlapEndInTask, categoryEndInTask);
-        const categoryOverlapMinutes = Math.max(0, categoryOverlapEndInTask - categoryOverlapStartInTask);
-        const elapsedBeforeCategoryOverlap = Math.max(0, categoryOverlapStartInTask - categoryStartInTask);
-        const subcategoryOverlapTotals = getSequentialOverlapAllocations(
-          selectedSubcategories,
-          normalizedSubcategoryTotals,
-          categoryOverlapMinutes,
-          elapsedBeforeCategoryOverlap,
-          categoryTotalMinutes
-        );
-
-        targets.forEach((subcategoryKey) => {
-          if (!Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
-            return;
-          }
-          group.subcategoryTotals[subcategoryKey] += subcategoryOverlapTotals[subcategoryKey] || 0;
-        });
-        return;
-      }
-
-      const subShare = share / targets.length;
-      targets.forEach((subcategoryKey) => {
-        if (Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
-          group.subcategoryTotals[subcategoryKey] += subShare;
+      groups.forEach((group) => {
+        if (!trackedGroupKeys.has(group.key)) {
+          return;
         }
+
+        const categoryTotalMinutes = Math.max(0, Number(taskCategoryAllocations[group.key]) || 0);
+        const share = Math.max(0, Number(overlapCategoryAllocations[group.key]) || 0);
+        if (share <= 0) {
+          return;
+        }
+        group.totalMinutes += share;
+        usedMinutes += share;
+
+        const selectedSubcategories = getTaskSubcategoriesForGroup(task, group.key);
+        const matchedSubcategories = selectedSubcategories.length
+          ? selectedSubcategories
+          : matchTaskSubcategories(group, taskText);
+        const fallbackKey = getTaskCategoryFallbackKey(group);
+        const targets = matchedSubcategories.length
+          ? matchedSubcategories
+          : (fallbackKey ? [fallbackKey] : []);
+        if (!targets.length) {
+          return;
+        }
+
+        if (selectedSubcategories.length && categoryTotalMinutes > 0) {
+          const sourceGroupAllocations = task
+            && task.subcategoryAllocations
+            && typeof task.subcategoryAllocations === "object"
+            && task.subcategoryAllocations[group.key]
+            && typeof task.subcategoryAllocations[group.key] === "object"
+            ? task.subcategoryAllocations[group.key]
+            : {};
+          const normalizedSubcategoryTotals = normalizeMinuteAllocationMap(
+            sourceGroupAllocations,
+            selectedSubcategories,
+            categoryTotalMinutes
+          );
+          const categoryOffset = categoryOffsets[group.key];
+          const categoryStart = categoryOffset ? categoryOffset.start : 0;
+          const overlapStartInTask = elapsedBeforeOverlapMinutes;
+          const overlapEndInTask = elapsedBeforeOverlapMinutes + overlapMinutes;
+          const categoryStartInTask = categoryStart;
+          const categoryEndInTask = categoryStartInTask + categoryTotalMinutes;
+          const categoryOverlapStartInTask = Math.max(overlapStartInTask, categoryStartInTask);
+          const categoryOverlapEndInTask = Math.min(overlapEndInTask, categoryEndInTask);
+          const categoryOverlapMinutes = Math.max(0, categoryOverlapEndInTask - categoryOverlapStartInTask);
+          const elapsedBeforeCategoryOverlap = Math.max(0, categoryOverlapStartInTask - categoryStartInTask);
+          const subcategoryOverlapTotals = getSequentialOverlapAllocations(
+            selectedSubcategories,
+            normalizedSubcategoryTotals,
+            categoryOverlapMinutes,
+            elapsedBeforeCategoryOverlap,
+            categoryTotalMinutes
+          );
+
+          targets.forEach((subcategoryKey) => {
+            if (!Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
+              return;
+            }
+            group.subcategoryTotals[subcategoryKey] += subcategoryOverlapTotals[subcategoryKey] || 0;
+          });
+
+          const subcategoryOffsets = {};
+          let subcategoryCursor = 0;
+          selectedSubcategories.forEach((subcategoryKey) => {
+            const allocated = Math.max(0, Number(normalizedSubcategoryTotals[subcategoryKey]) || 0);
+            subcategoryOffsets[subcategoryKey] = {
+              start: subcategoryCursor,
+              duration: allocated
+            };
+            subcategoryCursor += allocated;
+          });
+
+          selectedSubcategories.forEach((subcategoryKey) => {
+            const detailKeys = getTaskSubcategoryDetailsForTask(task, group.key, subcategoryKey);
+            if (!detailKeys.length) {
+              return;
+            }
+
+            const subcategoryOffset = subcategoryOffsets[subcategoryKey];
+            const subcategoryTotalMinutes = subcategoryOffset ? subcategoryOffset.duration : 0;
+            if (subcategoryTotalMinutes <= 0) {
+              return;
+            }
+
+            const subcategoryStartInTask = categoryStartInTask + (subcategoryOffset ? subcategoryOffset.start : 0);
+            const subcategoryEndInTask = subcategoryStartInTask + subcategoryTotalMinutes;
+            const subcategoryOverlapStartInTask = Math.max(overlapStartInTask, subcategoryStartInTask);
+            const subcategoryOverlapEndInTask = Math.min(overlapEndInTask, subcategoryEndInTask);
+            const subcategoryOverlapMinutes = Math.max(0, subcategoryOverlapEndInTask - subcategoryOverlapStartInTask);
+            if (subcategoryOverlapMinutes <= 0) {
+              return;
+            }
+
+            const elapsedBeforeSubcategoryOverlap = Math.max(0, subcategoryOverlapStartInTask - subcategoryStartInTask);
+            const detailAllocations = buildEvenMinuteAllocation(detailKeys, Math.round(subcategoryTotalMinutes));
+            const detailOverlapTotals = getSequentialOverlapAllocations(
+              detailKeys,
+              detailAllocations,
+              subcategoryOverlapMinutes,
+              elapsedBeforeSubcategoryOverlap,
+              subcategoryTotalMinutes
+            );
+
+            detailKeys.forEach((detailKey) => {
+              if (!Object.prototype.hasOwnProperty.call(group.subcategoryDetailTotals[subcategoryKey] || {}, detailKey)) {
+                return;
+              }
+              group.subcategoryDetailTotals[subcategoryKey][detailKey] += detailOverlapTotals[detailKey] || 0;
+            });
+          });
+          return;
+        }
+
+        const subShare = share / targets.length;
+        targets.forEach((subcategoryKey) => {
+          if (Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
+            group.subcategoryTotals[subcategoryKey] += subShare;
+          }
+        });
       });
     });
   });
@@ -5316,7 +5767,11 @@ function computeTaskCategoryStats(day) {
     percent: usedMinutes > 0 ? (group.totalMinutes / usedMinutes) * 100 : 0,
     subcategories: group.subcategories.map((item) => ({
       ...item,
-      minutes: group.subcategoryTotals[item.key] || 0
+      minutes: group.subcategoryTotals[item.key] || 0,
+      details: getTaskSubcategoryDetailsByKeys(group.key, item.key).map((detail) => ({
+        ...detail,
+        minutes: (group.subcategoryDetailTotals[item.key] && group.subcategoryDetailTotals[item.key][detail.key]) || 0
+      }))
     }))
   }));
 
@@ -5328,6 +5783,8 @@ function computeTaskCategoryStats(day) {
 
   return {
     day,
+    mode: periodContext.mode || "day",
+    mainlineLabel: periodContext.mainlineLabel || "今日主线",
     usedMinutes,
     activeGroupCount: activeGroups.length,
     topGroup,
@@ -5348,7 +5805,7 @@ function renderTaskCategorySummary(stats) {
   const items = [
     { label: "\u5DF2\u8BB0\u5F55\u65F6\u957F", value: formatDuration(stats.usedMinutes) },
     { label: "\u5DF2\u6FC0\u6D3B\u5927\u7C7B", value: `${stats.activeGroupCount}/${getTaskCategoryGroups().length}` },
-    { label: "\u4ECA\u65E5\u4E3B\u7EBF", value: `${topLabel} ${topDuration}` }
+    { label: stats.mainlineLabel || "\u4ECA\u65E5\u4E3B\u7EBF", value: `${topLabel} ${topDuration}` }
   ];
 
   items.forEach((item) => {
@@ -5474,8 +5931,39 @@ function renderTaskCategoryCards(groups) {
         const minutes = document.createElement("strong");
         minutes.textContent = item.minutes > 0 ? formatDuration(item.minutes) : "--";
 
-        chip.appendChild(label);
-        chip.appendChild(minutes);
+        const activeDetails = Array.isArray(item.details)
+          ? item.details.filter((detail) => (detail.minutes || 0) > 0)
+          : [];
+        const hasActiveDetails = activeDetails.length > 0;
+
+        if (hasActiveDetails) {
+          const headRow = document.createElement("div");
+          headRow.className = "task-category-subitem-head";
+
+          const headLabel = document.createElement("span");
+          headLabel.className = "task-category-subitem-label";
+          headLabel.textContent = item.label;
+
+          const headMinutes = document.createElement("strong");
+          headMinutes.className = "task-category-subitem-total";
+          headMinutes.textContent = item.minutes > 0 ? formatDuration(item.minutes) : "--";
+
+          headRow.appendChild(headLabel);
+          headRow.appendChild(headMinutes);
+          chip.appendChild(headRow);
+
+          const inlineText = activeDetails
+            .map((detail) => `${detail.label} ${Math.max(0, Math.round(Number(detail.minutes) || 0))}m`)
+            .join("\u3001");
+          const inline = document.createElement("span");
+          inline.className = "task-category-subdetail-inline";
+          inline.textContent = inlineText;
+          chip.appendChild(inline);
+        } else {
+          chip.appendChild(label);
+          chip.appendChild(minutes);
+        }
+
         subList.appendChild(chip);
       });
     }
@@ -5925,6 +6413,27 @@ function getTaskSubcategoriesForGroup(task, groupKey) {
   return rawItems.filter((item, index) => allowedKeys.has(item) && rawItems.indexOf(item) === index);
 }
 
+function getTaskSubcategoryDetailsForTask(task, groupKey, subcategoryKey) {
+  if (!task || !task.subcategoryDetails || typeof task.subcategoryDetails !== "object") {
+    return [];
+  }
+
+  const allowedKeys = new Set(
+    getTaskSubcategoryDetailsByKeys(groupKey, subcategoryKey).map((item) => item.key)
+  );
+  if (!allowedKeys.size) {
+    return [];
+  }
+
+  const groupSelections = task.subcategoryDetails[groupKey];
+  if (!groupSelections || typeof groupSelections !== "object") {
+    return [];
+  }
+
+  const rawItems = Array.isArray(groupSelections[subcategoryKey]) ? groupSelections[subcategoryKey] : [];
+  return rawItems.filter((item, index) => allowedKeys.has(item) && rawItems.indexOf(item) === index);
+}
+
 function getTaskCategoryFallbackKey(group) {
   if (!group || !Array.isArray(group.subcategories)) {
     return "";
@@ -6170,22 +6679,24 @@ function getTaskTimeGroup(task, dateValue) {
 }
 
 function getTaskEffectiveStartOnDate(task, dateValue) {
-  const range = getTaskRange(task);
-  if (!range) {
-    return parseDateTime(task.startAt);
+  const ranges = getTaskRanges(task);
+  if (!ranges.length) {
+    return parseDateTime(task && task.startAt ? task.startAt : "");
   }
 
   if (!dateValue) {
-    return range.start;
+    return ranges[0].start;
   }
 
   const dayStart = new Date(`${dateValue}T00:00`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-  if (range.end <= dayStart || range.start >= dayEnd) {
-    return null;
+  for (const range of ranges) {
+    if (range.end <= dayStart || range.start >= dayEnd) {
+      continue;
+    }
+    return new Date(Math.max(range.start.getTime(), dayStart.getTime()));
   }
-
-  return new Date(Math.max(range.start.getTime(), dayStart.getTime()));
+  return null;
 }
 
 function isTaskInDate(task, dateValue) {
@@ -6216,16 +6727,25 @@ function quickCreateTask(status) {
   refs.taskId.value = "";
   refs.taskStatus.value = Object.prototype.hasOwnProperty.call(STATUS_COLUMNS, status) ? status : "todo";
 
-  if (!refs.taskStart || !refs.taskEnd) {
+  const rows = getTaskSessionRows();
+  if (!rows.length) {
+    setTaskSessionsToForm([]);
+  }
+  const firstRow = getTaskSessionRows()[0];
+  const startInput = firstRow ? firstRow.querySelector(".task-session-start") : null;
+  const endInput = firstRow ? firstRow.querySelector(".task-session-end") : null;
+
+  if (!startInput || !endInput) {
     refs.taskName.scrollIntoView({ behavior: "smooth", block: "center" });
     refs.taskName.focus();
     return;
   }
 
-  if (!refs.taskStart.value && !refs.taskEnd.value) {
+  const hasAnySessionValue = getTaskSessionsFromFormRaw().some((session) => session.startAt || session.endAt);
+  if (!hasAnySessionValue) {
     const baseDate = refs.boardDate.value || state.boardDate || toDateInputValue(new Date());
-    refs.taskStart.value = `${baseDate}T09:00`;
-    refs.taskEnd.value = `${baseDate}T09:30`;
+    startInput.value = `${baseDate}T09:00`;
+    endInput.value = `${baseDate}T09:30`;
   }
 
   updateDurationPreview();
@@ -6241,7 +6761,7 @@ function createTaskCard(task) {
   const priorityPill = fragment.querySelector(".priority-pill");
 
   fragment.querySelector(".card-title").textContent = task.name;
-  fragment.querySelector(".card-time-range").textContent = `(${formatCardTimeRange(task.startAt, task.endAt)})`;
+  fragment.querySelector(".card-time-range").textContent = `(${formatTaskCardTimeRange(task)})`;
   priorityPill.textContent = formatPriorityLabel(task);
   priorityPill.classList.remove(
     "priority-pill--important_urgent",
@@ -6265,7 +6785,7 @@ function createTaskCard(task) {
   fragment.querySelector(".card-detail").textContent = task.detail || "\u65E0\u8BE6\u60C5";
   fragment.querySelector(".card-start").textContent = formatDateTime(task.startAt);
   fragment.querySelector(".card-end").textContent = formatDateTime(task.endAt);
-  fragment.querySelector(".card-duration").textContent = formatDuration(getDurationMinutes(task.startAt, task.endAt));
+  fragment.querySelector(".card-duration").textContent = formatDuration(getTaskDurationMinutes(task));
   fragment.querySelector(".card-category").textContent = getCategoryLabels(task);
 
   const isCollapsed = getCardCollapsed(task.id);
@@ -6322,10 +6842,9 @@ function fillForm(task) {
   setOptionalTagMode(task.process ? "process" : "mood");
   handlePriorityChange();
   refs.taskDetail.value = task.detail;
-  if (refs.taskStart && refs.taskEnd) {
-    refs.taskStart.value = task.startAt;
-    refs.taskEnd.value = task.endAt;
-  }
+  setTaskSessionsToForm(task && Array.isArray(task.sessions) && task.sessions.length
+    ? task.sessions
+    : [{ startAt: task.startAt, endAt: task.endAt }]);
   const categories = getTaskCategories(task);
   setSelectedCategoriesToForm(categories);
   setTaskCategoryAllocationInputsToForm(task.categoryAllocations, categories);
@@ -6856,30 +7375,22 @@ function renderRangeOverview(mode) {
 
 function computeRangeStats(targetRange) {
   const categoryTotals = Object.fromEntries(getCategoryKeys().map((key) => [key, 0]));
-  let usedMinutes = 0;
+  const usedMinutes = getOccupiedMinutesInRange(targetRange.start, targetRange.end);
 
   state.tasks.forEach((task) => {
     if (isTaskInTrash(task)) {
       return;
     }
-    const taskRange = getTaskRange(task);
-    if (!taskRange) {
-      return;
-    }
-
-    const overlap = getOverlapMinutes(taskRange.start, taskRange.end, targetRange.start, targetRange.end);
-    if (overlap <= 0) {
-      return;
-    }
-
-    usedMinutes += overlap;
-    const overlapStartMs = Math.max(taskRange.start.getTime(), targetRange.start.getTime());
-    const elapsedBeforeOverlap = (overlapStartMs - taskRange.start.getTime()) / 60000;
-    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap, elapsedBeforeOverlap);
-    Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
-      if (Object.prototype.hasOwnProperty.call(categoryTotals, categoryKey)) {
-        categoryTotals[categoryKey] += minutes;
+    iterateTaskOverlapChunks(task, targetRange.start, targetRange.end, ({ overlapMinutes, elapsedBeforeOverlapMinutes }) => {
+      if (overlapMinutes <= 0) {
+        return;
       }
+      const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlapMinutes, elapsedBeforeOverlapMinutes);
+      Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
+        if (Object.prototype.hasOwnProperty.call(categoryTotals, categoryKey)) {
+          categoryTotals[categoryKey] += minutes;
+        }
+      });
     });
   });
 
@@ -7082,42 +7593,35 @@ function getIsoWeekInfo(date) {
 }
 
 function getSlotSegments(slotStart, slotEnd) {
-  return state.tasks
-    .map((task) => {
-      if (isTaskInTrash(task)) {
-        return null;
-      }
-      const range = getTaskRange(task);
-      if (!range) {
-        return null;
-      }
+  const segments = [];
 
-      // Check if the task overlaps with this slot at all
+  state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
+
+    getTaskRanges(task).forEach((range) => {
       const overlapStart = Math.max(range.start.getTime(), slotStart.getTime());
       const overlapEnd = Math.min(range.end.getTime(), slotEnd.getTime());
       if (overlapEnd <= overlapStart) {
-        return null;
+        return;
       }
 
-      // Calculate how many minutes of the task have ALREADY elapsed before this slot starts
-      // This is crucial for multi-category tasks so we don't start the color distribution from the beginning in every slot
-      const taskStartMs = range.start.getTime();
-      let taskElapsedBeforeSlot = 0;
-      if (slotStart.getTime() > taskStartMs) {
-        taskElapsedBeforeSlot = (slotStart.getTime() - taskStartMs) / 60000;
-      }
+      const elapsedWithinRangeBeforeSlot = slotStart.getTime() > range.start.getTime()
+        ? (slotStart.getTime() - range.start.getTime()) / 60000
+        : 0;
+      const taskElapsedBeforeSlot = range.offsetMinutes + elapsedWithinRangeBeforeSlot;
 
-      return {
+      segments.push({
         task,
-        // How far into the slot does this task start?
         offsetMinutes: (overlapStart - slotStart.getTime()) / 60000,
-        // How long does this task run *within this specific slot*?
         overlapMinutes: (overlapEnd - overlapStart) / 60000,
         taskElapsedBeforeSlot
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.offsetMinutes - b.offsetMinutes);
+      });
+    });
+  });
+
+  return segments.sort((a, b) => a.offsetMinutes - b.offsetMinutes);
 }
 
 function computeDailyStats(day) {
@@ -7125,38 +7629,37 @@ function computeDailyStats(day) {
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
   const totals = Object.fromEntries(getCategoryKeys().map((key) => [key, 0]));
   const taskTotals = [];
-  let usedMinutes = 0;
+  const usedMinutes = getOccupiedMinutesInRange(dayStart, dayEnd);
 
   state.tasks.forEach((task) => {
     if (isTaskInTrash(task)) {
       return;
     }
-    const range = getTaskRange(task);
-    if (!range) {
-      return;
-    }
-
-    const overlap = getOverlapMinutes(range.start, range.end, dayStart, dayEnd);
-    if (overlap <= 0) {
-      return;
-    }
-
-    usedMinutes += overlap;
     const categories = getTaskCategories(task);
-    const overlapStartMs = Math.max(range.start.getTime(), dayStart.getTime());
-    const elapsedBeforeOverlap = (overlapStartMs - range.start.getTime()) / 60000;
-    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap, elapsedBeforeOverlap);
-    Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
-      if (Object.prototype.hasOwnProperty.call(totals, categoryKey)) {
-        totals[categoryKey] += minutes;
+    let taskOverlapMinutes = 0;
+
+    iterateTaskOverlapChunks(task, dayStart, dayEnd, ({ overlapMinutes, elapsedBeforeOverlapMinutes }) => {
+      if (overlapMinutes <= 0) {
+        return;
       }
+      taskOverlapMinutes += overlapMinutes;
+      const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlapMinutes, elapsedBeforeOverlapMinutes);
+      Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
+        if (Object.prototype.hasOwnProperty.call(totals, categoryKey)) {
+          totals[categoryKey] += minutes;
+        }
+      });
     });
+
+    if (taskOverlapMinutes <= 0) {
+      return;
+    }
 
     taskTotals.push({
       id: task.id,
       name: task.name,
       categories,
-      minutes: overlap
+      minutes: taskOverlapMinutes
     });
   });
 
@@ -7414,11 +7917,7 @@ function getDurationMinutes(startAt, endAt) {
 }
 
 function intersects(task, slotStart, slotEnd) {
-  const range = getTaskRange(task);
-  if (!range) {
-    return false;
-  }
-  return range.end > slotStart && range.start < slotEnd;
+  return getTaskRanges(task).some((range) => range.end > slotStart && range.start < slotEnd);
 }
 
 function getOverlapMinutes(startA, endA, startB, endB) {
@@ -7433,6 +7932,47 @@ function getOverlapMinutes(startA, endA, startB, endB) {
   return Math.round((end - start) / 60000);
 }
 
+function getOccupiedMinutesInRange(rangeStart, rangeEnd) {
+  if (
+    !(rangeStart instanceof Date)
+    || !(rangeEnd instanceof Date)
+    || Number.isNaN(rangeStart.getTime())
+    || Number.isNaN(rangeEnd.getTime())
+    || rangeEnd <= rangeStart
+  ) {
+    return 0;
+  }
+
+  const intervals = [];
+  state.tasks.forEach((task) => {
+    if (isTaskInTrash(task)) {
+      return;
+    }
+    iterateTaskOverlapChunks(task, rangeStart, rangeEnd, ({ overlapStart, overlapEnd }) => {
+      intervals.push([overlapStart.getTime(), overlapEnd.getTime()]);
+    });
+  });
+
+  if (!intervals.length) {
+    return 0;
+  }
+
+  intervals.sort((left, right) => left[0] - right[0]);
+  const merged = [intervals[0].slice()];
+  for (let index = 1; index < intervals.length; index += 1) {
+    const [start, end] = intervals[index];
+    const last = merged[merged.length - 1];
+    if (start <= last[1]) {
+      last[1] = Math.max(last[1], end);
+      continue;
+    }
+    merged.push([start, end]);
+  }
+
+  const occupiedMs = merged.reduce((sum, [start, end]) => sum + Math.max(0, end - start), 0);
+  return Math.round(occupiedMs / 60000);
+}
+
 function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -7444,6 +7984,20 @@ function formatDateTime(value) {
 function formatShortTime(value) {
   const date = new Date(value);
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function formatTaskCardTimeRange(task) {
+  const ranges = getTaskRanges(task);
+  if (!ranges.length) {
+    return "-";
+  }
+  const first = ranges[0];
+  const last = ranges[ranges.length - 1];
+  const base = `${formatHourMinute(first.start)}-${formatHourMinute(last.end)}`;
+  if (ranges.length <= 1) {
+    return base;
+  }
+  return `${base} · ${ranges.length}次`;
 }
 
 function formatCardTimeRange(startAt, endAt) {

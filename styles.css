@@ -230,6 +230,96 @@ small {
   gap: 12px;
 }
 
+.task-session-block {
+  display: grid;
+  gap: 8px;
+}
+
+.task-session-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-session-title {
+  font-weight: 600;
+  font-size: 0.94rem;
+  color: #614734;
+}
+
+.task-session-add-btn {
+  padding: 5px 12px;
+  font-size: 0.82rem;
+}
+
+.task-session-list {
+  display: grid;
+  gap: 8px;
+}
+
+.task-session-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(167, 120, 75, 0.28);
+  background: rgba(255, 247, 233, 0.72);
+}
+
+.task-session-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1px solid rgba(167, 120, 75, 0.26);
+  background: rgba(255, 250, 239, 0.92);
+  color: var(--ink);
+  font-size: 0.93rem;
+  font-weight: 600;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.task-session-field {
+  gap: 4px;
+}
+
+.task-session-field > span {
+  font-size: 0.8rem;
+  color: #7a5b45;
+}
+
+.task-session-field input {
+  min-height: 42px;
+}
+
+.task-session-remove-btn {
+  min-width: 68px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.task-detail-field {
+  gap: 8px;
+}
+
+.field-label-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.field-label-inline > small {
+  align-self: auto;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
 .task-tag-row {
   align-items: start;
 }
@@ -1657,11 +1747,20 @@ button.danger {
   align-items: center;
 }
 
+.task-category-tools #task-category-mode-switch {
+  flex: 0 0 auto;
+}
+
 .task-category-tools #task-category-page-back-btn {
   margin-left: auto;
 }
 
 #task-category-page-date-label {
+  min-width: 188px;
+}
+
+#task-category-page-date-label input,
+#task-category-page-date-label .selected-week {
   min-width: 188px;
 }
 
@@ -1819,6 +1918,59 @@ button.danger {
 .task-category-subitem strong {
   color: #98735c;
   font-size: 0.92rem;
+}
+
+.task-category-subitem-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-category-subitem .task-category-subitem-label {
+  color: #755844;
+  font-size: 0.84rem;
+}
+
+.task-category-subitem .task-category-subitem-total {
+  color: #98735c;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.task-category-subitem .task-category-subdetail-inline {
+  color: #7a5b45;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.task-category-subdetail-list {
+  display: grid;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(167, 120, 75, 0.18);
+}
+
+.task-category-subdetail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-category-subdetail-label {
+  color: #6f503a;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.task-category-subdetail-minutes {
+  color: #8a6248;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .task-category-subitem.is-active {
@@ -2723,6 +2875,20 @@ button.danger {
     grid-template-columns: 1fr;
   }
 
+  .task-session-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .task-session-index {
+    justify-content: flex-start;
+    padding: 0 10px;
+  }
+
+  .task-session-remove-btn {
+    width: 100%;
+  }
+
   .category-checklist {
     grid-template-columns: 1fr;
   }
@@ -2872,12 +3038,6 @@ button.danger {
     padding: 8px 11px;
   }
 }
-
-
-
-
-
-
 
 
 
