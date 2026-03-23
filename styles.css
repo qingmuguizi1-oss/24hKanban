@@ -641,6 +641,62 @@ small {
   box-shadow: 0 0 0 3px rgba(196, 102, 49, 0.18);
 }
 
+.task-subdetail-wrap {
+  margin-top: 8px;
+  border-top: 1px dashed rgba(167, 120, 75, 0.24);
+  padding-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.task-subdetail-group {
+  display: grid;
+  gap: 6px;
+}
+
+.task-subdetail-title {
+  color: #6f503a;
+  font-size: 0.78rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.task-subdetail-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-subdetail-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(170, 123, 79, 0.28);
+  background: rgba(255, 248, 234, 0.92);
+  color: #6a4a34;
+  font-size: 0.78rem;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.task-subdetail-chip:hover {
+  border-color: rgba(170, 123, 79, 0.44);
+  background: rgba(255, 242, 216, 0.96);
+}
+
+.task-subdetail-chip.is-active {
+  border-color: var(--task-subcategory-accent, #c46631);
+  background: rgba(255, 238, 206, 0.98);
+  color: #4f2f1a;
+}
+
+.task-subdetail-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(196, 102, 49, 0.18);
+}
+
 .importance-level-group {
   margin-top: 8px;
   display: flex;
@@ -1787,6 +1843,11 @@ button.danger {
   gap: 8px;
 }
 
+.task-category-editor-block {
+  display: grid;
+  gap: 8px;
+}
+
 .task-category-editor-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1816,6 +1877,45 @@ button.danger {
 .task-category-editor-icon-btn {
   min-width: 42px;
   padding: 7px 10px;
+}
+
+.task-category-editor-detail {
+  border: 1px dashed rgba(167, 120, 75, 0.22);
+  border-radius: 12px;
+  padding: 8px;
+  background: rgba(255, 251, 243, 0.65);
+  display: grid;
+  gap: 8px;
+}
+
+.task-category-editor-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-category-editor-detail-head span {
+  color: #6f503a;
+  font-size: 0.8rem;
+}
+
+.task-category-editor-detail-list {
+  display: grid;
+  gap: 6px;
+}
+
+.task-category-editor-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-category-editor-detail-empty {
+  margin: 0;
+  color: #876650;
+  font-size: 0.78rem;
 }
 
 .task-category-subitem.is-active strong {
@@ -2772,7 +2872,6 @@ button.danger {
     padding: 8px 11px;
   }
 }
-
 
 
 

@@ -122,6 +122,15 @@ const DEFAULT_CATEGORY_DEFINITIONS = [
 const DEFAULT_CATEGORY_LABEL = "\uD83E\uDDE9 \u672A\u547D\u540D";
 const DEFAULT_CATEGORY_COLOR = "#8c8c8c";
 const TASK_CATEGORY_DEFAULT_PLANNED_MINUTES = 4 * 60;
+const TASK_CATEGORY_PLANNED_MINUTES_BY_KEY = Object.freeze({
+  work: 90,
+  explore: 120,
+  topic: 60,
+  study: 120,
+  dev: 180,
+  inspiration: 0,
+  record: 60
+});
 const TASK_CATEGORY_GROUPS = [
   {
     key: "work",
@@ -181,10 +190,44 @@ const TASK_CATEGORY_GROUPS = [
     icon: "\uD83D\uDCD8",
     description: "\u4EE5\u5438\u6536\u3001\u5185\u5316\u548C\u7EC3\u4E60\u4E3A\u76EE\u6807\u7684\u65F6\u95F4\u6295\u5165",
     subcategories: [
-      { key: "reading", label: "\u9605\u8BFB", keywords: ["\u9605\u8BFB", "\u8BFB\u4E66", "\u8BFB", "\u7CBE\u8BFB"] },
+      {
+        key: "reading",
+        label: "\u9605\u8BFB",
+        keywords: ["\u9605\u8BFB", "\u8BFB\u4E66", "\u8BFB", "\u7CBE\u8BFB"],
+        details: [
+          { key: "hongloumeng", label: "\u7EA2\u697C\u68A6" },
+          { key: "one_hundred_years_of_solitude", label: "\u767E\u5E74\u5B64\u72EC" }
+        ]
+      },
       { key: "english", label: "\u82F1\u8BED", keywords: ["\u82F1\u8BED", "english", "\u5355\u8BCD", "\u53E3\u8BED"] },
       { key: "course", label: "\u8BFE\u7A0B", keywords: ["\u8BFE\u7A0B", "\u4E0A\u8BFE", "\u542C\u8BFE", "\u5B66\u4E60"] },
       { key: "practice", label: "\u7EC3\u4E60", keywords: ["\u7EC3\u4E60", "\u5237\u9898", "\u8BAD\u7EC3", "\u5B9E\u64CD"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
+    key: "inspiration",
+    label: "\u7075\u611F",
+    icon: "\uD83D\uDCA1",
+    description: "\u56F4\u7ED5\u6355\u6349\u3001\u53D1\u6563\u4E0E\u6C89\u6DC0\u60F3\u6CD5\u7684\u65F6\u95F4\u6295\u5165",
+    subcategories: [
+      { key: "capture", label: "\u6355\u6349", keywords: ["\u7075\u611F", "\u60F3\u6CD5", "\u70B9\u5B50", "\u8BB0\u5F55"] },
+      { key: "brainstorm", label: "\u53D1\u6563", keywords: ["\u53D1\u6563", "\u8111\u66B4", "\u8054\u60F3", "\u5EF6\u5C55"] },
+      { key: "selection", label: "\u9009\u9898", keywords: ["\u9009\u9898", "\u65B9\u5411", "\u4E3B\u9898", "\u547D\u9898"] },
+      { key: "organize", label: "\u6574\u7406", keywords: ["\u6574\u7406", "\u5F52\u6863", "\u68B3\u7406", "\u5206\u7C7B"] },
+      { key: "other", label: "\u5176\u4ED6" }
+    ]
+  },
+  {
+    key: "record",
+    label: "\u8BB0\u5F55",
+    icon: "\uD83D\uDCDD",
+    description: "\u4EE5\u65E5\u5FD7\u3001\u590D\u76D8\u548C\u77E5\u8BC6\u6C89\u6DC0\u4E3A\u4E3B\u7684\u8F93\u5165\u8F93\u51FA",
+    subcategories: [
+      { key: "journal", label: "\u65E5\u5FD7", keywords: ["\u65E5\u5FD7", "\u8BB0\u5F55", "\u968F\u7B14", "journal"] },
+      { key: "review", label: "\u590D\u76D8", keywords: ["\u590D\u76D8", "\u603B\u7ED3", "\u56DE\u987E", "\u53CD\u601D"] },
+      { key: "material", label: "\u7D20\u6750", keywords: ["\u7D20\u6750", "\u622A\u56FE", "\u94FE\u63A5", "\u6536\u85CF"] },
+      { key: "docs", label: "\u6587\u6863", keywords: ["\u6587\u6863", "\u7B14\u8BB0", "\u7EAA\u8981", "\u6587\u7A3F"] },
       { key: "other", label: "\u5176\u4ED6" }
     ]
   }
@@ -249,6 +292,7 @@ const state = {
   draggingCategoryKey: "",
   taskCategoryEditingGroupKey: "",
   taskSubcategorySelections: {},
+  taskSubcategoryDetailSelections: {},
   taskCategoryAllocationInputs: {},
   taskSubcategoryAllocationInputs: {},
   collapsedById: {},
@@ -2180,6 +2224,7 @@ function restoreTaskFormDraft() {
     draftCategories
   );
   setSelectedTaskSubcategoriesToForm(draft.subcategories, draftCategories);
+  setSelectedTaskSubcategoryDetailsToForm(draft.subcategoryDetails, draft.subcategories, draftCategories);
   setTaskSubcategoryAllocationInputsToForm(
     draft.subcategoryAllocationInputs || draft.subcategoryAllocations,
     draft.subcategories,
@@ -2208,6 +2253,7 @@ function persistTaskFormDraft() {
   try {
     const categories = getSelectedCategoriesFromForm();
     const subcategories = getSelectedTaskSubcategoriesFromForm();
+    const subcategoryDetails = getSelectedTaskSubcategoryDetailsFromForm();
     const draft = {
       taskId: refs.taskId.value || "",
       name: refs.taskName.value || "",
@@ -2224,6 +2270,7 @@ function persistTaskFormDraft() {
       endAt: refs.taskEnd ? normalizeDateTimeInput(refs.taskEnd.value) : "",
       categories,
       subcategories,
+      subcategoryDetails,
       categoryAllocationInputs: sanitizeTaskCategoryAllocationInputs(
         state.taskCategoryAllocationInputs,
         categories
@@ -2654,6 +2701,11 @@ function renderCategoryChecklist() {
     state.taskSubcategorySelections,
     Array.from(previousSelected)
   );
+  state.taskSubcategoryDetailSelections = sanitizeTaskSubcategoryDetailSelections(
+    state.taskSubcategoryDetailSelections,
+    state.taskSubcategorySelections,
+    Array.from(previousSelected)
+  );
   renderCategorySummary();
 }
 
@@ -2684,6 +2736,11 @@ function handleCategoryInputChanged(event) {
   );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
     state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    selectedCategories
+  );
+  state.taskSubcategoryDetailSelections = sanitizeTaskSubcategoryDetailSelections(
+    state.taskSubcategoryDetailSelections,
     state.taskSubcategorySelections,
     selectedCategories
   );
@@ -2726,6 +2783,11 @@ function setSelectedCategoriesToForm(categoryKeys) {
   );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
     state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    Array.from(selected)
+  );
+  state.taskSubcategoryDetailSelections = sanitizeTaskSubcategoryDetailSelections(
+    state.taskSubcategoryDetailSelections,
     state.taskSubcategorySelections,
     Array.from(selected)
   );
@@ -3163,11 +3225,36 @@ function getSelectedTaskSubcategoriesFromForm() {
   );
 }
 
+function getSelectedTaskSubcategoryDetailsFromForm() {
+  return sanitizeTaskSubcategoryDetailSelections(
+    state.taskSubcategoryDetailSelections,
+    getSelectedTaskSubcategoriesFromForm(),
+    getSelectedCategoriesFromForm()
+  );
+}
+
 function setSelectedTaskSubcategoriesToForm(subcategorySelections, categoryKeys = getSelectedCategoriesFromForm()) {
   state.taskSubcategorySelections = sanitizeTaskSubcategorySelections(subcategorySelections, categoryKeys);
+  state.taskSubcategoryDetailSelections = sanitizeTaskSubcategoryDetailSelections(
+    state.taskSubcategoryDetailSelections,
+    state.taskSubcategorySelections,
+    categoryKeys
+  );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
     state.taskSubcategoryAllocationInputs,
     state.taskSubcategorySelections,
+    categoryKeys
+  );
+}
+
+function setSelectedTaskSubcategoryDetailsToForm(
+  detailSelections,
+  subcategorySelections = state.taskSubcategorySelections,
+  categoryKeys = getSelectedCategoriesFromForm()
+) {
+  state.taskSubcategoryDetailSelections = sanitizeTaskSubcategoryDetailSelections(
+    detailSelections,
+    subcategorySelections,
     categoryKeys
   );
 }
@@ -3267,6 +3354,53 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
 
     section.appendChild(heading);
     section.appendChild(chipWrap);
+
+    if (selectedSubcategoryOptions.length > 0) {
+      const detailWrap = document.createElement("div");
+      detailWrap.className = "task-subdetail-wrap";
+      let hasDetailBlocks = false;
+
+      selectedSubcategoryOptions.forEach((option) => {
+        const detailOptions = getTaskSubcategoryDetailsByKeys(group.key, option.key);
+        if (!detailOptions.length) {
+          return;
+        }
+        hasDetailBlocks = true;
+
+        const block = document.createElement("section");
+        block.className = "task-subdetail-group";
+
+        const blockTitle = document.createElement("div");
+        blockTitle.className = "task-subdetail-title";
+        blockTitle.textContent = `${option.label} · 细分`;
+
+        const chips = document.createElement("div");
+        chips.className = "task-subdetail-chip-wrap";
+        const selectedDetails = new Set(getSelectedTaskSubcategoryDetailsForSubcategory(group.key, option.key));
+
+        detailOptions.forEach((detail) => {
+          const chip = document.createElement("button");
+          const selected = selectedDetails.has(detail.key);
+          chip.type = "button";
+          chip.className = "task-subdetail-chip";
+          chip.classList.toggle("is-active", selected);
+          chip.setAttribute("aria-pressed", selected ? "true" : "false");
+          chip.textContent = detail.label;
+          chip.addEventListener("click", () => {
+            toggleTaskSubcategoryDetailSelection(group.key, option.key, detail.key);
+          });
+          chips.appendChild(chip);
+        });
+
+        block.appendChild(blockTitle);
+        block.appendChild(chips);
+        detailWrap.appendChild(block);
+      });
+
+      if (hasDetailBlocks) {
+        section.appendChild(detailWrap);
+      }
+    }
 
     if (selectedSubcategoryOptions.length > 0) {
       const allocationWrap = document.createElement("div");
@@ -3391,7 +3525,12 @@ function createDefaultTaskCategorySubcategoryConfig() {
       group.subcategories.map((item) => ({
         key: item.key,
         label: item.label,
-        keywords: Array.isArray(item.keywords) ? [...item.keywords] : []
+        keywords: Array.isArray(item.keywords) ? [...item.keywords] : [],
+        details: normalizeTaskCategorySubcategoryDetails(
+          item.key,
+          item.details,
+          Array.isArray(item.details) ? item.details : []
+        )
       }))
     ])
   );
@@ -3401,13 +3540,41 @@ function getBaseTaskCategoryGroupByKey(groupKey) {
   return TASK_CATEGORY_GROUPS.find((group) => group.key === groupKey) || null;
 }
 
+function normalizeTaskCategorySubcategoryDetails(subcategoryKey, details, fallbackDetails = []) {
+  const fallback = Array.isArray(fallbackDetails) ? fallbackDetails : [];
+  const source = Array.isArray(details) ? details : fallback;
+  const usedKeys = new Set();
+  const normalized = [];
+
+  source.forEach((item, index) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    const label = normalizeCategoryLabel(item.label, `细分${index + 1}`);
+    const seed = item.key || `${subcategoryKey}_${label}`;
+    let key = normalizeCategoryKey(seed) || `${normalizeCategoryKey(subcategoryKey) || "detail"}_detail_${index + 1}`;
+    let duplicateIndex = 1;
+    while (usedKeys.has(key)) {
+      key = `${normalizeCategoryKey(seed) || `${normalizeCategoryKey(subcategoryKey) || "detail"}_detail`}_${duplicateIndex}`;
+      duplicateIndex += 1;
+    }
+    usedKeys.add(key);
+    normalized.push({ key, label });
+  });
+
+  return normalized;
+}
+
 function normalizeTaskCategorySubcategoryConfig(groupKey, subcategories, fallbackSubcategories = []) {
   const fallback = Array.isArray(fallbackSubcategories) && fallbackSubcategories.length
     ? fallbackSubcategories
-    : [{ key: `${groupKey}_other`, label: "\u5176\u4ED6", keywords: [] }];
+    : [{ key: `${groupKey}_other`, label: "\u5176\u4ED6", keywords: [], details: [] }];
   const source = Array.isArray(subcategories) && subcategories.length ? subcategories : fallback;
   const usedKeys = new Set();
   const normalized = [];
+  const fallbackByKey = new Map(
+    fallback.map((item) => [normalizeCategoryKey(item && item.key ? item.key : ""), item])
+  );
 
   source.forEach((item, index) => {
     if (!item || typeof item !== "object") {
@@ -3430,11 +3597,16 @@ function normalizeTaskCategorySubcategoryConfig(groupKey, subcategories, fallbac
         .filter((keyword, keywordIndex, list) => keyword && list.indexOf(keyword) === keywordIndex)
         .slice(0, 8)
       : [];
+    const fallbackItem = fallbackByKey.get(normalizeCategoryKey(item.key || "")) || null;
+    const fallbackDetails = fallbackItem && Array.isArray(fallbackItem.details)
+      ? fallbackItem.details
+      : [];
 
     normalized.push({
       key,
       label,
-      keywords
+      keywords,
+      details: normalizeTaskCategorySubcategoryDetails(key, item.details, fallbackDetails)
     });
   });
 
@@ -3444,7 +3616,12 @@ function normalizeTaskCategorySubcategoryConfig(groupKey, subcategories, fallbac
   return fallback.map((item) => ({
     key: normalizeCategoryKey(item.key) || createUniqueTaskCategorySubcategoryKey(groupKey, item.label, normalized),
     label: normalizeCategoryLabel(item.label, "\u5176\u4ED6"),
-    keywords: Array.isArray(item.keywords) ? [...item.keywords] : []
+    keywords: Array.isArray(item.keywords) ? [...item.keywords] : [],
+    details: normalizeTaskCategorySubcategoryDetails(
+      normalizeCategoryKey(item.key) || `${groupKey}_other`,
+      item.details,
+      Array.isArray(item.details) ? item.details : []
+    )
   }));
 }
 
@@ -3524,8 +3701,50 @@ function getTaskCategoryGroups() {
   }));
 }
 
+function sortTaskCategoryGroupsByCategoryOrder(groups) {
+  const source = Array.isArray(groups) ? groups : [];
+  if (!source.length) {
+    return [];
+  }
+
+  const categoryOrderMap = new Map(
+    getCategoryKeys().map((key, index) => [key, index])
+  );
+  const taskCategoryBaseOrderMap = new Map(
+    TASK_CATEGORY_GROUPS.map((group, index) => [group.key, index])
+  );
+
+  return [...source].sort((left, right) => {
+    const leftOrder = categoryOrderMap.has(left.key) ? categoryOrderMap.get(left.key) : Number.MAX_SAFE_INTEGER;
+    const rightOrder = categoryOrderMap.has(right.key) ? categoryOrderMap.get(right.key) : Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    const leftBase = taskCategoryBaseOrderMap.has(left.key) ? taskCategoryBaseOrderMap.get(left.key) : Number.MAX_SAFE_INTEGER;
+    const rightBase = taskCategoryBaseOrderMap.has(right.key) ? taskCategoryBaseOrderMap.get(right.key) : Number.MAX_SAFE_INTEGER;
+    return leftBase - rightBase;
+  });
+}
+
 function getTaskCategoryGroupByKey(groupKey) {
   return getTaskCategoryGroups().find((group) => group.key === groupKey) || null;
+}
+
+function getTaskCategorySubcategoryByKeys(groupKey, subcategoryKey) {
+  const group = getTaskCategoryGroupByKey(groupKey);
+  if (!group || !Array.isArray(group.subcategories)) {
+    return null;
+  }
+  return group.subcategories.find((item) => item.key === subcategoryKey) || null;
+}
+
+function getTaskSubcategoryDetailsByKeys(groupKey, subcategoryKey) {
+  const subcategory = getTaskCategorySubcategoryByKeys(groupKey, subcategoryKey);
+  if (!subcategory || !Array.isArray(subcategory.details)) {
+    return [];
+  }
+  return normalizeTaskCategorySubcategoryDetails(subcategory.key, subcategory.details, subcategory.details);
 }
 
 function sanitizeTaskSubcategorySelections(subcategorySelections, categoryKeys = getSelectedCategoriesFromForm()) {
@@ -3553,9 +3772,62 @@ function sanitizeTaskSubcategorySelections(subcategorySelections, categoryKeys =
   return normalized;
 }
 
+function sanitizeTaskSubcategoryDetailSelections(
+  detailSelections,
+  subcategorySelections = state.taskSubcategorySelections,
+  categoryKeys = getSelectedCategoriesFromForm()
+) {
+  const allowedCategoryKeys = sanitizeCategoryKeys(categoryKeys);
+  const normalizedSubcategorySelections = sanitizeTaskSubcategorySelections(subcategorySelections, allowedCategoryKeys);
+  const source = detailSelections && typeof detailSelections === "object" ? detailSelections : {};
+  const normalized = {};
+
+  allowedCategoryKeys.forEach((groupKey) => {
+    const selectedSubcategories = Array.isArray(normalizedSubcategorySelections[groupKey])
+      ? normalizedSubcategorySelections[groupKey]
+      : [];
+    if (!selectedSubcategories.length) {
+      return;
+    }
+
+    const groupSource = source[groupKey] && typeof source[groupKey] === "object" ? source[groupKey] : {};
+    const groupResult = {};
+
+    selectedSubcategories.forEach((subcategoryKey) => {
+      const allowedDetails = new Set(
+        getTaskSubcategoryDetailsByKeys(groupKey, subcategoryKey).map((item) => item.key)
+      );
+      if (!allowedDetails.size) {
+        return;
+      }
+      const rawItems = Array.isArray(groupSource[subcategoryKey]) ? groupSource[subcategoryKey] : [];
+      const selected = rawItems
+        .map((item) => String(item || "").trim())
+        .filter((item, index, list) => item && allowedDetails.has(item) && list.indexOf(item) === index);
+      if (selected.length) {
+        groupResult[subcategoryKey] = selected;
+      }
+    });
+
+    if (Object.keys(groupResult).length) {
+      normalized[groupKey] = groupResult;
+    }
+  });
+
+  return normalized;
+}
+
 function getSelectedTaskSubcategoriesForGroup(groupKey) {
   const selections = getSelectedTaskSubcategoriesFromForm();
   return Array.isArray(selections[groupKey]) ? selections[groupKey] : [];
+}
+
+function getSelectedTaskSubcategoryDetailsForSubcategory(groupKey, subcategoryKey) {
+  const selections = getSelectedTaskSubcategoryDetailsFromForm();
+  if (!selections[groupKey] || typeof selections[groupKey] !== "object") {
+    return [];
+  }
+  return Array.isArray(selections[groupKey][subcategoryKey]) ? selections[groupKey][subcategoryKey] : [];
 }
 
 function toggleTaskSubcategorySelection(groupKey, subcategoryKey) {
@@ -3576,6 +3848,37 @@ function toggleTaskSubcategorySelection(groupKey, subcategoryKey) {
   }
 
   setSelectedTaskSubcategoriesToForm(nextSelections);
+  renderTaskSubcategoryPanel();
+  persistTaskFormDraft();
+}
+
+function toggleTaskSubcategoryDetailSelection(groupKey, subcategoryKey, detailKey) {
+  const nextSelections = getSelectedTaskSubcategoryDetailsFromForm();
+  const nextGroup = nextSelections[groupKey] && typeof nextSelections[groupKey] === "object"
+    ? { ...nextSelections[groupKey] }
+    : {};
+  const current = Array.isArray(nextGroup[subcategoryKey]) ? [...nextGroup[subcategoryKey]] : [];
+  const existingIndex = current.indexOf(detailKey);
+
+  if (existingIndex >= 0) {
+    current.splice(existingIndex, 1);
+  } else {
+    current.push(detailKey);
+  }
+
+  if (current.length) {
+    nextGroup[subcategoryKey] = current;
+  } else {
+    delete nextGroup[subcategoryKey];
+  }
+
+  if (Object.keys(nextGroup).length) {
+    nextSelections[groupKey] = nextGroup;
+  } else {
+    delete nextSelections[groupKey];
+  }
+
+  setSelectedTaskSubcategoryDetailsToForm(nextSelections);
   renderTaskSubcategoryPanel();
   persistTaskFormDraft();
 }
@@ -3882,11 +4185,17 @@ function deleteCategoryDefinition(targetKey) {
       nextCategories,
       nextCategoryAllocations
     );
+    const nextSubcategoryDetails = sanitizeTaskSubcategoryDetailSelections(
+      task.subcategoryDetails,
+      nextSubcategories,
+      nextCategories
+    );
     const categoriesUnchanged = hasSameCategorySequence(currentCategories, nextCategories);
     const subcategoriesUnchanged = JSON.stringify(task.subcategories || {}) === JSON.stringify(nextSubcategories);
+    const subcategoryDetailsUnchanged = JSON.stringify(task.subcategoryDetails || {}) === JSON.stringify(nextSubcategoryDetails);
     const categoryAllocationsUnchanged = JSON.stringify(task.categoryAllocations || {}) === JSON.stringify(nextCategoryAllocations);
     const subcategoryAllocationsUnchanged = JSON.stringify(task.subcategoryAllocations || {}) === JSON.stringify(nextSubcategoryAllocations);
-    if (categoriesUnchanged && subcategoriesUnchanged && categoryAllocationsUnchanged && subcategoryAllocationsUnchanged) {
+    if (categoriesUnchanged && subcategoriesUnchanged && subcategoryDetailsUnchanged && categoryAllocationsUnchanged && subcategoryAllocationsUnchanged) {
       return task;
     }
     remappedTaskCount += 1;
@@ -3895,6 +4204,7 @@ function deleteCategoryDefinition(targetKey) {
       categories: nextCategories,
       categoryAllocations: nextCategoryAllocations,
       subcategories: nextSubcategories,
+      subcategoryDetails: nextSubcategoryDetails,
       subcategoryAllocations: nextSubcategoryAllocations
     };
   });
@@ -3978,6 +4288,11 @@ function normalizeTask(input) {
     normalizedCategories,
     categoryAllocations
   );
+  const subcategoryDetails = sanitizeTaskSubcategoryDetailSelections(
+    input.subcategoryDetails,
+    subcategories,
+    normalizedCategories
+  );
   const deletedAt = normalizeDeletedAt(input.deletedAt);
   const deletedFromStatus = deletedAt > 0
     ? sanitizeTaskStatus(input.deletedFromStatus || status)
@@ -4001,6 +4316,7 @@ function normalizeTask(input) {
     categories: normalizedCategories,
     categoryAllocations,
     subcategories,
+    subcategoryDetails,
     subcategoryAllocations,
     status,
     deletedAt,
@@ -4345,7 +4661,59 @@ function getTaskCategoryAllocations(task) {
   );
 }
 
-function getTaskCategoryOverlapAllocations(task, overlapMinutes) {
+function getSequentialOverlapAllocations(keys, totalAllocations, overlapMinutes, elapsedBeforeOverlapMinutes, totalMinutes) {
+  const orderedKeys = Array.isArray(keys)
+    ? keys.filter((key, index, list) => key && list.indexOf(key) === index)
+    : [];
+  const overlap = Math.max(0, Number(overlapMinutes) || 0);
+  const total = Math.max(0, Number(totalMinutes) || 0);
+  if (!orderedKeys.length || overlap <= 0) {
+    return {};
+  }
+
+  if (total <= 0) {
+    const fallback = buildEvenMinuteAllocation(orderedKeys, Math.round(overlap));
+    return Object.fromEntries(orderedKeys.map((key) => [key, fallback[key] || 0]));
+  }
+
+  const source = totalAllocations && typeof totalAllocations === "object" ? totalAllocations : {};
+  const result = Object.fromEntries(orderedKeys.map((key) => [key, 0]));
+  let elapsed = Math.max(0, Math.min(total, Number(elapsedBeforeOverlapMinutes) || 0));
+  let remaining = overlap;
+
+  orderedKeys.forEach((key) => {
+    if (remaining <= 0) {
+      return;
+    }
+
+    const allocated = Math.max(0, Number(source[key]) || 0);
+    if (allocated <= 0) {
+      return;
+    }
+
+    if (elapsed >= allocated) {
+      elapsed -= allocated;
+      return;
+    }
+
+    const available = allocated - elapsed;
+    const consumed = Math.min(available, remaining);
+    if (consumed > 0) {
+      result[key] += consumed;
+      remaining -= consumed;
+    }
+    elapsed = 0;
+  });
+
+  if (remaining > 0) {
+    const lastKey = orderedKeys[orderedKeys.length - 1];
+    result[lastKey] += remaining;
+  }
+
+  return result;
+}
+
+function getTaskCategoryOverlapAllocations(task, overlapMinutes, taskElapsedBeforeOverlapMinutes = 0) {
   const categories = getTaskCategories(task);
   const overlap = Math.max(0, Number(overlapMinutes) || 0);
   const durationMinutes = getTaskDurationMinutes(task);
@@ -4353,15 +4721,13 @@ function getTaskCategoryOverlapAllocations(task, overlapMinutes) {
     return {};
   }
 
-  if (durationMinutes <= 0) {
-    const fallback = buildEvenMinuteAllocation(categories, Math.round(overlap));
-    return Object.fromEntries(categories.map((key) => [key, fallback[key] || 0]));
-  }
-
-  const ratio = Math.max(0, Math.min(1, overlap / durationMinutes));
   const totalAllocations = getTaskCategoryAllocations(task);
-  return Object.fromEntries(
-    categories.map((key) => [key, (totalAllocations[key] || 0) * ratio])
+  return getSequentialOverlapAllocations(
+    categories,
+    totalAllocations,
+    overlap,
+    taskElapsedBeforeOverlapMinutes,
+    durationMinutes
   );
 }
 
@@ -4450,6 +4816,7 @@ function onSubmitTask(event) {
   event.preventDefault();
 
   const categories = getSelectedCategoriesFromForm();
+  const taskSubcategories = getSelectedTaskSubcategoriesFromForm();
   const selectedMood = getSelectedMoodFromForm();
   const selectedProcess = getSelectedProcessFromForm();
   const existingTask = state.tasks.find((item) => item.id === refs.taskId.value);
@@ -4470,7 +4837,8 @@ function onSubmitTask(event) {
     startAt: normalizeDateTimeInput(refs.taskStart ? refs.taskStart.value : ""),
     endAt: normalizeDateTimeInput(refs.taskEnd ? refs.taskEnd.value : ""),
     categories,
-    subcategories: getSelectedTaskSubcategoriesFromForm(),
+    subcategories: taskSubcategories,
+    subcategoryDetails: getSelectedTaskSubcategoryDetailsFromForm(),
     status: sanitizeTaskStatus(refs.taskStatus.value),
     deletedAt: 0,
     deletedFromStatus: ""
@@ -4561,6 +4929,7 @@ function resetForm() {
   setOptionalTagMode(DEFAULT_OPTIONAL_TAG_MODE);
   state.taskCategoryAllocationInputs = {};
   state.taskSubcategoryAllocationInputs = {};
+  state.taskSubcategoryDetailSelections = {};
   setSelectedTaskSubcategoriesToForm({});
   setSelectedCategoriesToForm([]);
   handlePriorityChange();
@@ -4833,6 +5202,7 @@ function computeTaskCategoryStats(day) {
     totalMinutes: 0,
     subcategoryTotals: Object.fromEntries(group.subcategories.map((item) => [item.key, 0]))
   }));
+  const trackedGroupKeys = new Set(groups.map((group) => group.key));
 
   let usedMinutes = 0;
 
@@ -4850,25 +5220,35 @@ function computeTaskCategoryStats(day) {
       return;
     }
 
-    usedMinutes += overlap;
     const taskCategories = getTaskCategories(task);
     const taskCategoryAllocations = getTaskCategoryAllocations(task);
-    const taskDuration = getTaskDurationMinutes(task);
-    const overlapRatio = taskDuration > 0
-      ? Math.max(0, Math.min(1, overlap / taskDuration))
-      : 0;
+    const overlapStartMs = Math.max(range.start.getTime(), dayStart.getTime());
+    const elapsedBeforeOverlap = (overlapStartMs - range.start.getTime()) / 60000;
+    const overlapCategoryAllocations = getTaskCategoryOverlapAllocations(task, overlap, elapsedBeforeOverlap);
+    const categoryOffsets = {};
+    let categoryCursor = 0;
+    taskCategories.forEach((categoryKey) => {
+      const allocated = Math.max(0, Number(taskCategoryAllocations[categoryKey]) || 0);
+      categoryOffsets[categoryKey] = {
+        start: categoryCursor,
+        duration: allocated
+      };
+      categoryCursor += allocated;
+    });
     const taskText = `${task.name || ""} ${task.detail || ""}`;
 
     groups.forEach((group) => {
-      if (!taskCategories.includes(group.key)) {
+      if (!trackedGroupKeys.has(group.key)) {
         return;
       }
 
-      const categoryTotalMinutes = taskCategoryAllocations[group.key] || 0;
-      const share = taskDuration > 0
-        ? categoryTotalMinutes * overlapRatio
-        : overlap / taskCategories.length;
+      const categoryTotalMinutes = Math.max(0, Number(taskCategoryAllocations[group.key]) || 0);
+      const share = Math.max(0, Number(overlapCategoryAllocations[group.key]) || 0);
+      if (share <= 0) {
+        return;
+      }
       group.totalMinutes += share;
+      usedMinutes += share;
 
       const selectedSubcategories = getTaskSubcategoriesForGroup(task, group.key);
       const matchedSubcategories = selectedSubcategories.length
@@ -4882,7 +5262,7 @@ function computeTaskCategoryStats(day) {
         return;
       }
 
-      if (selectedSubcategories.length && taskDuration > 0) {
+      if (selectedSubcategories.length && categoryTotalMinutes > 0) {
         const sourceGroupAllocations = task
           && task.subcategoryAllocations
           && typeof task.subcategoryAllocations === "object"
@@ -4895,13 +5275,29 @@ function computeTaskCategoryStats(day) {
           selectedSubcategories,
           categoryTotalMinutes
         );
+        const categoryOffset = categoryOffsets[group.key];
+        const categoryStart = categoryOffset ? categoryOffset.start : 0;
+        const overlapStartInTask = elapsedBeforeOverlap;
+        const overlapEndInTask = elapsedBeforeOverlap + overlap;
+        const categoryStartInTask = categoryStart;
+        const categoryEndInTask = categoryStartInTask + categoryTotalMinutes;
+        const categoryOverlapStartInTask = Math.max(overlapStartInTask, categoryStartInTask);
+        const categoryOverlapEndInTask = Math.min(overlapEndInTask, categoryEndInTask);
+        const categoryOverlapMinutes = Math.max(0, categoryOverlapEndInTask - categoryOverlapStartInTask);
+        const elapsedBeforeCategoryOverlap = Math.max(0, categoryOverlapStartInTask - categoryStartInTask);
+        const subcategoryOverlapTotals = getSequentialOverlapAllocations(
+          selectedSubcategories,
+          normalizedSubcategoryTotals,
+          categoryOverlapMinutes,
+          elapsedBeforeCategoryOverlap,
+          categoryTotalMinutes
+        );
 
         targets.forEach((subcategoryKey) => {
           if (!Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
             return;
           }
-          const totalMinutes = normalizedSubcategoryTotals[subcategoryKey] || 0;
-          group.subcategoryTotals[subcategoryKey] += totalMinutes * overlapRatio;
+          group.subcategoryTotals[subcategoryKey] += subcategoryOverlapTotals[subcategoryKey] || 0;
         });
         return;
       }
@@ -4924,7 +5320,8 @@ function computeTaskCategoryStats(day) {
     }))
   }));
 
-  const activeGroups = normalizedGroups.filter((group) => group.totalMinutes > 0);
+  const orderedGroups = sortTaskCategoryGroupsByCategoryOrder(normalizedGroups);
+  const activeGroups = orderedGroups.filter((group) => group.totalMinutes > 0);
   const topGroup = normalizedGroups
     .slice()
     .sort((left, right) => right.totalMinutes - left.totalMinutes)[0] || null;
@@ -4934,7 +5331,7 @@ function computeTaskCategoryStats(day) {
     usedMinutes,
     activeGroupCount: activeGroups.length,
     topGroup,
-    groups: normalizedGroups
+    groups: orderedGroups
   };
 }
 
@@ -5035,7 +5432,10 @@ function renderTaskCategoryCards(groups) {
     duration.textContent = formatDuration(group.totalMinutes);
 
     const planned = document.createElement("span");
-    planned.textContent = `\u8BA1\u5212\u8FDB\u884C ${formatDuration(TASK_CATEGORY_DEFAULT_PLANNED_MINUTES)}`;
+    const plannedMinutes = Object.prototype.hasOwnProperty.call(TASK_CATEGORY_PLANNED_MINUTES_BY_KEY, group.key)
+      ? TASK_CATEGORY_PLANNED_MINUTES_BY_KEY[group.key]
+      : TASK_CATEGORY_DEFAULT_PLANNED_MINUTES;
+    planned.textContent = `\u8BA1\u5212\u8FDB\u884C ${formatDuration(plannedMinutes)}`;
 
     metric.appendChild(duration);
     metric.appendChild(planned);
@@ -5110,6 +5510,9 @@ function createTaskCategoryEditor(group) {
   list.className = "task-category-editor-list";
 
   group.subcategories.forEach((item, index) => {
+    const block = document.createElement("div");
+    block.className = "task-category-editor-block";
+
     const row = document.createElement("div");
     row.className = "task-category-editor-row";
 
@@ -5163,7 +5566,73 @@ function createTaskCategoryEditor(group) {
 
     row.appendChild(input);
     row.appendChild(rowActions);
-    list.appendChild(row);
+    block.appendChild(row);
+
+    const detailWrap = document.createElement("div");
+    detailWrap.className = "task-category-editor-detail";
+
+    const detailHead = document.createElement("div");
+    detailHead.className = "task-category-editor-detail-head";
+    const detailTitle = document.createElement("span");
+    detailTitle.textContent = "细分项";
+    const addDetailBtn = document.createElement("button");
+    addDetailBtn.type = "button";
+    addDetailBtn.className = "secondary task-category-editor-icon-btn";
+    addDetailBtn.textContent = "+";
+    addDetailBtn.title = "新增细分项";
+    addDetailBtn.addEventListener("click", () => {
+      addTaskCategorySubcategoryDetail(group.key, item.key);
+    });
+    detailHead.appendChild(detailTitle);
+    detailHead.appendChild(addDetailBtn);
+    detailWrap.appendChild(detailHead);
+
+    const detailList = document.createElement("div");
+    detailList.className = "task-category-editor-detail-list";
+    const details = Array.isArray(item.details) ? item.details : [];
+
+    if (!details.length) {
+      const empty = document.createElement("p");
+      empty.className = "task-category-editor-detail-empty";
+      empty.textContent = "暂无细分项";
+      detailList.appendChild(empty);
+    } else {
+      details.forEach((detail) => {
+        const detailRow = document.createElement("div");
+        detailRow.className = "task-category-editor-detail-row";
+
+        const detailInput = document.createElement("input");
+        detailInput.type = "text";
+        detailInput.className = "task-category-editor-input";
+        detailInput.maxLength = 24;
+        detailInput.value = detail.label;
+        detailInput.setAttribute("aria-label", `${group.label}/${item.label}细分项名称`);
+        detailInput.addEventListener("change", () => {
+          renameTaskCategorySubcategoryDetail(group.key, item.key, detail.key, detailInput.value);
+        });
+        detailInput.addEventListener("blur", () => {
+          if (detailInput.value !== detail.label) {
+            renameTaskCategorySubcategoryDetail(group.key, item.key, detail.key, detailInput.value);
+          }
+        });
+
+        const detailDeleteBtn = document.createElement("button");
+        detailDeleteBtn.type = "button";
+        detailDeleteBtn.className = "secondary task-category-editor-icon-btn";
+        detailDeleteBtn.textContent = "删除";
+        detailDeleteBtn.addEventListener("click", () => {
+          deleteTaskCategorySubcategoryDetail(group.key, item.key, detail.key);
+        });
+
+        detailRow.appendChild(detailInput);
+        detailRow.appendChild(detailDeleteBtn);
+        detailList.appendChild(detailRow);
+      });
+    }
+
+    detailWrap.appendChild(detailList);
+    block.appendChild(detailWrap);
+    list.appendChild(block);
   });
 
   wrap.appendChild(list);
@@ -5198,6 +5667,18 @@ function createUniqueTaskCategorySubcategoryKey(groupKey, seed, subcategories = 
   return candidate;
 }
 
+function createUniqueTaskCategorySubcategoryDetailKey(groupKey, subcategoryKey, seed, details = []) {
+  const existing = new Set((Array.isArray(details) ? details : []).map((item) => item && item.key).filter(Boolean));
+  const base = normalizeCategoryKey(`${groupKey}_${subcategoryKey}_${seed}`) || `${groupKey}_${subcategoryKey}_detail`;
+  let candidate = base;
+  let index = 1;
+  while (existing.has(candidate)) {
+    candidate = `${base}_${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
 function syncTaskSubcategoryConfigChanges() {
   let tasksChanged = false;
 
@@ -5215,21 +5696,30 @@ function syncTaskSubcategoryConfigChanges() {
       categories,
       nextCategoryAllocations
     );
+    const nextSubcategoryDetails = sanitizeTaskSubcategoryDetailSelections(
+      task.subcategoryDetails,
+      nextSubcategories,
+      categories
+    );
     const prevSerialized = JSON.stringify(task.subcategories || {});
     const nextSerialized = JSON.stringify(nextSubcategories);
     const categoryAllocPrevSerialized = JSON.stringify(task.categoryAllocations || {});
     const categoryAllocNextSerialized = JSON.stringify(nextCategoryAllocations);
     const subcategoryAllocPrevSerialized = JSON.stringify(task.subcategoryAllocations || {});
     const subcategoryAllocNextSerialized = JSON.stringify(nextSubcategoryAllocations);
+    const subcategoryDetailsPrevSerialized = JSON.stringify(task.subcategoryDetails || {});
+    const subcategoryDetailsNextSerialized = JSON.stringify(nextSubcategoryDetails);
     if (
       prevSerialized !== nextSerialized
       || categoryAllocPrevSerialized !== categoryAllocNextSerialized
       || subcategoryAllocPrevSerialized !== subcategoryAllocNextSerialized
+      || subcategoryDetailsPrevSerialized !== subcategoryDetailsNextSerialized
     ) {
       tasksChanged = true;
       return {
         ...task,
         subcategories: nextSubcategories,
+        subcategoryDetails: nextSubcategoryDetails,
         categoryAllocations: nextCategoryAllocations,
         subcategoryAllocations: nextSubcategoryAllocations
       };
@@ -5247,6 +5737,11 @@ function syncTaskSubcategoryConfigChanges() {
   );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
     state.taskSubcategoryAllocationInputs,
+    state.taskSubcategorySelections,
+    getSelectedCategoriesFromForm()
+  );
+  state.taskSubcategoryDetailSelections = sanitizeTaskSubcategoryDetailSelections(
+    state.taskSubcategoryDetailSelections,
     state.taskSubcategorySelections,
     getSelectedCategoriesFromForm()
   );
@@ -5281,20 +5776,25 @@ function updateTaskCategorySubcategoryConfig(groupKey, nextSubcategories) {
 function addTaskCategorySubcategory(groupKey) {
   const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
     ...item,
-    keywords: Array.isArray(item.keywords) ? [...item.keywords] : []
+    keywords: Array.isArray(item.keywords) ? [...item.keywords] : [],
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
   }));
   const label = `\u65B0\u5C0F\u7C7B${current.length + 1}`;
   current.push({
     key: createUniqueTaskCategorySubcategoryKey(groupKey, label, current),
     label,
-    keywords: []
+    keywords: [],
+    details: []
   });
   state.taskCategoryEditingGroupKey = groupKey;
   updateTaskCategorySubcategoryConfig(groupKey, current);
 }
 
 function renameTaskCategorySubcategory(groupKey, subcategoryKey, nextLabel) {
-  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({ ...item }));
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
+  }));
   const normalizedLabel = normalizeCategoryLabel(nextLabel, "");
   const target = current.find((item) => item.key === subcategoryKey);
   if (!target || !normalizedLabel || target.label === normalizedLabel) {
@@ -5308,7 +5808,10 @@ function renameTaskCategorySubcategory(groupKey, subcategoryKey, nextLabel) {
 }
 
 function moveTaskCategorySubcategory(groupKey, subcategoryKey, offset) {
-  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({ ...item }));
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
+  }));
   const currentIndex = current.findIndex((item) => item.key === subcategoryKey);
   const targetIndex = currentIndex + Number(offset || 0);
   if (currentIndex < 0 || targetIndex < 0 || targetIndex >= current.length) {
@@ -5322,7 +5825,10 @@ function moveTaskCategorySubcategory(groupKey, subcategoryKey, offset) {
 }
 
 function deleteTaskCategorySubcategory(groupKey, subcategoryKey) {
-  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({ ...item }));
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
+  }));
   if (current.length <= 1) {
     alert("\u81F3\u5C11\u9700\u4FDD\u7559 1 \u4E2A\u5C0F\u7C7B\u3002");
     return;
@@ -5331,6 +5837,66 @@ function deleteTaskCategorySubcategory(groupKey, subcategoryKey) {
   const next = current.filter((item) => item.key !== subcategoryKey);
   state.taskCategoryEditingGroupKey = groupKey;
   updateTaskCategorySubcategoryConfig(groupKey, next);
+}
+
+function addTaskCategorySubcategoryDetail(groupKey, subcategoryKey) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
+  }));
+  const target = current.find((item) => item.key === subcategoryKey);
+  if (!target) {
+    return;
+  }
+
+  const details = Array.isArray(target.details) ? target.details : [];
+  const label = `新细分${details.length + 1}`;
+  details.push({
+    key: createUniqueTaskCategorySubcategoryDetailKey(groupKey, subcategoryKey, label, details),
+    label
+  });
+  target.details = details;
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, current);
+}
+
+function renameTaskCategorySubcategoryDetail(groupKey, subcategoryKey, detailKey, nextLabel) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
+  }));
+  const normalizedLabel = normalizeCategoryLabel(nextLabel, "");
+  const target = current.find((item) => item.key === subcategoryKey);
+  if (!target || !normalizedLabel) {
+    renderTaskCategoryPage();
+    return;
+  }
+
+  const details = Array.isArray(target.details) ? target.details : [];
+  const detail = details.find((item) => item.key === detailKey);
+  if (!detail || detail.label === normalizedLabel) {
+    renderTaskCategoryPage();
+    return;
+  }
+
+  detail.label = normalizedLabel;
+  target.details = details;
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, current);
+}
+
+function deleteTaskCategorySubcategoryDetail(groupKey, subcategoryKey, detailKey) {
+  const current = getTaskCategorySubcategoriesConfigByGroupKey(groupKey).map((item) => ({
+    ...item,
+    details: Array.isArray(item.details) ? item.details.map((detail) => ({ ...detail })) : []
+  }));
+  const target = current.find((item) => item.key === subcategoryKey);
+  if (!target) {
+    return;
+  }
+  target.details = (Array.isArray(target.details) ? target.details : []).filter((item) => item.key !== detailKey);
+  state.taskCategoryEditingGroupKey = groupKey;
+  updateTaskCategorySubcategoryConfig(groupKey, current);
 }
 
 function matchTaskSubcategories(group, text) {
@@ -5764,6 +6330,7 @@ function fillForm(task) {
   setSelectedCategoriesToForm(categories);
   setTaskCategoryAllocationInputsToForm(task.categoryAllocations, categories);
   setSelectedTaskSubcategoriesToForm(task.subcategories, categories);
+  setSelectedTaskSubcategoryDetailsToForm(task.subcategoryDetails, task.subcategories, categories);
   setTaskSubcategoryAllocationInputsToForm(task.subcategoryAllocations, task.subcategories, categories);
   refs.taskStatus.value = task.status;
   renderCategorySummary();
@@ -6306,7 +6873,9 @@ function computeRangeStats(targetRange) {
     }
 
     usedMinutes += overlap;
-    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap);
+    const overlapStartMs = Math.max(taskRange.start.getTime(), targetRange.start.getTime());
+    const elapsedBeforeOverlap = (overlapStartMs - taskRange.start.getTime()) / 60000;
+    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap, elapsedBeforeOverlap);
     Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
       if (Object.prototype.hasOwnProperty.call(categoryTotals, categoryKey)) {
         categoryTotals[categoryKey] += minutes;
@@ -6574,7 +7143,9 @@ function computeDailyStats(day) {
 
     usedMinutes += overlap;
     const categories = getTaskCategories(task);
-    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap);
+    const overlapStartMs = Math.max(range.start.getTime(), dayStart.getTime());
+    const elapsedBeforeOverlap = (overlapStartMs - range.start.getTime()) / 60000;
+    const overlapAllocations = getTaskCategoryOverlapAllocations(task, overlap, elapsedBeforeOverlap);
     Object.entries(overlapAllocations).forEach(([categoryKey, minutes]) => {
       if (Object.prototype.hasOwnProperty.call(totals, categoryKey)) {
         totals[categoryKey] += minutes;
