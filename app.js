@@ -5803,7 +5803,7 @@ function renderTaskCategorySummary(stats) {
     : "--";
 
   const items = [
-    { label: "\u5DF2\u8BB0\u5F55\u65F6\u957F", value: formatDuration(stats.usedMinutes) },
+    { label: "八大类时长", value: formatDuration(stats.usedMinutes) },
     { label: "\u5DF2\u6FC0\u6D3B\u5927\u7C7B", value: `${stats.activeGroupCount}/${getTaskCategoryGroups().length}` },
     { label: stats.mainlineLabel || "\u4ECA\u65E5\u4E3B\u7EBF", value: `${topLabel} ${topDuration}` }
   ];
