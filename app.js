@@ -1,4 +1,4 @@
-const STORAGE_KEY = "time-efficiency-tasks-v1";
+﻿const STORAGE_KEY = "time-efficiency-tasks-v1";
 const TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY = "time-efficiency-tasks-last-local-mutation-at-v1";
 const TASK_FORM_DRAFT_STORAGE_KEY = "time-efficiency-task-form-draft-v1";
 const CATEGORY_DEFINITIONS_STORAGE_KEY = "time-efficiency-category-definitions-v1";
@@ -309,7 +309,10 @@ const state = {
   taskSubcategorySelections: {},
   taskSubcategoryDetailSelections: {},
   taskCategoryAllocationInputs: {},
+  taskCategorySequenceInputs: [],
+  taskCategorySequenceEnabled: false,
   taskSubcategoryAllocationInputs: {},
+  categorySelectionOrder: [],
   collapsedById: {},
   boardGroupCollapsed: Object.fromEntries(
     Object.keys(STATUS_COLUMNS).map((status) => [
@@ -349,6 +352,12 @@ const refs = {
   taskCategoryAllocationPanel: document.getElementById("task-category-allocation-panel"),
   taskCategoryAllocationCaption: document.getElementById("task-category-allocation-caption"),
   taskCategoryAllocationList: document.getElementById("task-category-allocation-list"),
+  taskCategorySequencePanel: document.getElementById("task-category-sequence-panel"),
+  taskCategorySequenceBody: document.getElementById("task-category-sequence-body"),
+  taskCategorySequenceCaption: document.getElementById("task-category-sequence-caption"),
+  taskCategorySequenceList: document.getElementById("task-category-sequence-list"),
+  taskCategorySequenceAddBtn: document.getElementById("task-category-sequence-add"),
+  taskCategorySequenceToggle: document.getElementById("task-category-sequence-toggle"),
   openCategoryManagerFormBtn: document.getElementById("open-category-manager-form"),
   categoryManagerModal: document.getElementById("category-manager-modal"),
   categoryManagerDialog: document.getElementById("category-manager-dialog"),
@@ -372,6 +381,9 @@ const refs = {
   taskCategoryModeDayBtn: document.getElementById("task-category-mode-day"),
   taskCategoryModeWeekBtn: document.getElementById("task-category-mode-week"),
   taskCategoryDate: document.getElementById("task-category-page-date"),
+  taskCategoryPeriodControl: document.getElementById("task-category-period-control"),
+  taskCategoryPrevWeekBtn: document.getElementById("task-category-prev-week-btn"),
+  taskCategoryNextWeekBtn: document.getElementById("task-category-next-week-btn"),
   taskCategorySelectedWeek: document.getElementById("task-category-selected-week"),
   taskCategorySummaryPanel: document.getElementById("task-category-page-summary"),
   taskCategoryCards: document.getElementById("task-category-page-cards"),
@@ -518,6 +530,16 @@ function init() {
       renderCategorySummary();
     });
   }
+  if (refs.taskCategorySequenceToggle) {
+    refs.taskCategorySequenceToggle.addEventListener("change", (event) => {
+      const selected = getSelectedCategoriesFromForm();
+      const draft = getCategoryAllocationDraftForForm(selected, getTaskDurationMinutesFromForm());
+      setTaskCategorySequenceEnabled(Boolean(event.target.checked), {
+        selectedKeys: selected,
+        categoryDraft: draft
+      });
+    });
+  }
   refs.selectedDate.addEventListener("input", () => {
     state.selectedDate = refs.selectedDate.value;
     renderAllocationOverview();
@@ -556,6 +578,16 @@ function init() {
   if (refs.taskCategoryModeWeekBtn) {
     refs.taskCategoryModeWeekBtn.addEventListener("click", () => {
       setTaskCategoryMode("week");
+    });
+  }
+  if (refs.taskCategoryPrevWeekBtn) {
+    refs.taskCategoryPrevWeekBtn.addEventListener("click", () => {
+      shiftTaskCategoryWeek(-1);
+    });
+  }
+  if (refs.taskCategoryNextWeekBtn) {
+    refs.taskCategoryNextWeekBtn.addEventListener("click", () => {
+      shiftTaskCategoryWeek(1);
     });
   }
   if (refs.bedtimeReviewPrevWeekBtn) {
@@ -1592,7 +1624,7 @@ function buildCloudSyncFailureHint(error) {
     return "";
   }
 
-  return `CloudBase 可能发生跨域拦截，请在云开发控制台将当前域名加入 Web 安全域名：${window.location.origin}`;
+  return `CloudBase 鍙兘鍙戠敓璺ㄥ煙鎷︽埅锛岃鍦ㄤ簯寮€鍙戞帶鍒跺彴灏嗗綋鍓嶅煙鍚嶅姞鍏?Web 瀹夊叏鍩熷悕锛?{window.location.origin}`;
 }
 
 function getUpdatedCountFromUpdateResult(result) {
@@ -2249,16 +2281,16 @@ function createTaskSessionRow(session = {}) {
     row = document.createElement("div");
     row.className = "task-session-row";
     row.innerHTML = `
-      <span class="task-session-index">第1次</span>
+      <span class="task-session-index">绗?娆?/span>
       <label class="task-session-field">
-        <span>开始时间</span>
+        <span>寮€濮嬫椂闂?/span>
         <input class="task-session-start" type="datetime-local" required>
       </label>
       <label class="task-session-field">
-        <span>结束时间</span>
+        <span>缁撴潫鏃堕棿</span>
         <input class="task-session-end" type="datetime-local" required>
       </label>
-      <button type="button" class="secondary task-session-remove-btn">删除</button>
+      <button type="button" class="secondary task-session-remove-btn">鍒犻櫎</button>
     `;
   }
 
@@ -2390,7 +2422,7 @@ function restoreTaskFormDraft() {
   setSelectedProcessScoreToForm(draft.processScore);
   setOptionalTagMode(draft.optionalTagMode);
   handlePriorityChange();
-  refs.taskDetail.value = typeof draft.detail === "string" ? draft.detail.slice(0, 300) : "";
+  refs.taskDetail.value = typeof draft.detail === "string" ? draft.detail.slice(0, 500) : "";
 
   const draftSessions = Array.isArray(draft.sessions) && draft.sessions.length
     ? draft.sessions
@@ -2403,6 +2435,15 @@ function restoreTaskFormDraft() {
     draft.categoryAllocationInputs || draft.categoryAllocations,
     draftCategories
   );
+  setTaskCategorySequenceInputsToForm(
+    draft.categorySequenceInputs || draft.categorySequence,
+    draftCategories,
+    draft.categoryAllocationInputs || draft.categoryAllocations
+  );
+  setTaskCategorySequenceEnabled(draft.categorySequenceEnabled === true, {
+    skipRender: true,
+    skipPersist: true
+  });
   setSelectedTaskSubcategoriesToForm(draft.subcategories, draftCategories);
   setSelectedTaskSubcategoryDetailsToForm(draft.subcategoryDetails, draft.subcategories, draftCategories);
   setTaskSubcategoryAllocationInputsToForm(
@@ -2460,6 +2501,11 @@ function persistTaskFormDraft() {
         state.taskCategoryAllocationInputs,
         categories
       ),
+      categorySequenceInputs: sanitizeTaskCategorySequenceInputs(
+        state.taskCategorySequenceInputs,
+        categories
+      ),
+      categorySequenceEnabled: state.taskCategorySequenceEnabled === true,
       subcategoryAllocationInputs: sanitizeTaskSubcategoryAllocationInputs(
         state.taskSubcategoryAllocationInputs,
         subcategories,
@@ -2843,7 +2889,7 @@ function buildCategoryLabelFromKey(key) {
   if (!normalizedKey) {
     return DEFAULT_CATEGORY_LABEL;
   }
-  return `🧩 ${normalizedKey.replace(/[_-]+/g, " ")}`;
+  return `馃З ${normalizedKey.replace(/[_-]+/g, " ")}`;
 }
 
 function loadCategoryDefinitions() {
@@ -2989,6 +3035,10 @@ function renderCategoryChecklist() {
     state.taskCategoryAllocationInputs,
     Array.from(previousSelected)
   );
+  state.taskCategorySequenceInputs = sanitizeTaskCategorySequenceInputs(
+    state.taskCategorySequenceInputs,
+    Array.from(previousSelected)
+  );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
     state.taskSubcategoryAllocationInputs,
     state.taskSubcategorySelections,
@@ -3025,6 +3075,10 @@ function handleCategoryInputChanged(event) {
   );
   state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
     state.taskCategoryAllocationInputs,
+    selectedCategories
+  );
+  state.taskCategorySequenceInputs = sanitizeTaskCategorySequenceInputs(
+    state.taskCategorySequenceInputs,
     selectedCategories
   );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
@@ -3072,6 +3126,10 @@ function setSelectedCategoriesToForm(categoryKeys) {
   );
   state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
     state.taskCategoryAllocationInputs,
+    Array.from(selected)
+  );
+  state.taskCategorySequenceInputs = sanitizeTaskCategorySequenceInputs(
+    state.taskCategorySequenceInputs,
     Array.from(selected)
   );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
@@ -3129,6 +3187,246 @@ function sanitizeTaskSubcategoryAllocationInputs(
   });
 
   return next;
+}
+
+function buildCategorySequenceTotals(sequenceEntries, categoryKeys = []) {
+  const keys = sanitizeCategoryKeys(categoryKeys);
+  const totals = Object.fromEntries(keys.map((key) => [key, 0]));
+  const source = Array.isArray(sequenceEntries) ? sequenceEntries : [];
+  source.forEach((item) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    const key = normalizeCategoryKey(item.key);
+    if (!Object.prototype.hasOwnProperty.call(totals, key)) {
+      return;
+    }
+    const minutes = Math.max(0, Number(item.minutes) || 0);
+    totals[key] += minutes;
+  });
+  return totals;
+}
+
+function areMinuteAllocationsEqual(leftAllocations, rightAllocations, categoryKeys = []) {
+  const keys = sanitizeCategoryKeys(categoryKeys);
+  return keys.every((key) => {
+    const left = Math.max(0, Math.round(Number(leftAllocations && leftAllocations[key]) || 0));
+    const right = Math.max(0, Math.round(Number(rightAllocations && rightAllocations[key]) || 0));
+    return left === right;
+  });
+}
+
+function buildDefaultTaskCategorySequenceEntries(categoryKeys, totalMinutes, categoryAllocations) {
+  const keys = sanitizeCategoryKeys(categoryKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  if (!keys.length) {
+    return [];
+  }
+  const normalizedAllocations = normalizeMinuteAllocationMap(categoryAllocations, keys, total);
+  return keys.map((key) => ({
+    key,
+    minutes: Math.max(0, Number(normalizedAllocations[key]) || 0)
+  }));
+}
+
+function sanitizeTaskCategorySequenceInputs(sequenceInputs, categoryKeys = getSelectedCategoriesFromForm()) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  const selectedSet = new Set(selected);
+  const source = Array.isArray(sequenceInputs) ? sequenceInputs : [];
+  const next = [];
+
+  source.forEach((item) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    const key = normalizeCategoryKey(item.key);
+    if (!selectedSet.has(key)) {
+      return;
+    }
+    const parsed = normalizeMinutesInputValue(item.minutes);
+    next.push({
+      key,
+      minutes: parsed === null ? "" : String(parsed)
+    });
+  });
+
+  return next;
+}
+
+function ensureTaskCategorySequenceInputDefaults(selectedKeys, totalMinutes, categoryAllocations) {
+  const keys = sanitizeCategoryKeys(selectedKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  state.taskCategorySequenceInputs = sanitizeTaskCategorySequenceInputs(state.taskCategorySequenceInputs, keys);
+
+  if (!keys.length) {
+    state.taskCategorySequenceInputs = [];
+    return;
+  }
+
+  if (!state.taskCategorySequenceInputs.length) {
+    const defaults = buildDefaultTaskCategorySequenceEntries(keys, total, categoryAllocations);
+    state.taskCategorySequenceInputs = defaults.map((item) => ({
+      key: item.key,
+      minutes: String(item.minutes)
+    }));
+  }
+}
+
+function getCategorySequenceDraftForForm(
+  selectedKeys = getSelectedCategoriesFromForm(),
+  totalMinutes = getTaskDurationMinutesFromForm(),
+  categoryAllocations = null
+) {
+  const keys = sanitizeCategoryKeys(selectedKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  const normalizedCategoryAllocations = normalizeMinuteAllocationMap(
+    categoryAllocations && typeof categoryAllocations === "object" ? categoryAllocations : {},
+    keys,
+    total
+  );
+
+  ensureTaskCategorySequenceInputDefaults(keys, total, normalizedCategoryAllocations);
+
+  const entries = state.taskCategorySequenceInputs.map((item) => ({
+    key: item.key,
+    minutes: Math.max(0, normalizeMinutesInputValue(item.minutes) || 0)
+  }));
+  const sum = entries.reduce((acc, item) => acc + item.minutes, 0);
+  const totalsByCategory = buildCategorySequenceTotals(entries, keys);
+  const categoriesMatch = areMinuteAllocationsEqual(totalsByCategory, normalizedCategoryAllocations, keys);
+
+  return {
+    entries,
+    total,
+    sum,
+    remaining: total - sum,
+    categoryAllocations: normalizedCategoryAllocations,
+    totalsByCategory,
+    categoriesMatch,
+    isValid: entries.length > 0 && sum === total && categoriesMatch
+  };
+}
+
+function sanitizeTaskCategorySequence(sequenceEntries, categoryKeys, totalMinutes, categoryAllocations) {
+  const keys = sanitizeCategoryKeys(categoryKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  if (!keys.length) {
+    return [];
+  }
+
+  const normalizedCategoryAllocations = normalizeMinuteAllocationMap(categoryAllocations, keys, total);
+  const fallback = buildDefaultTaskCategorySequenceEntries(keys, total, normalizedCategoryAllocations);
+  const selectedSet = new Set(keys);
+  const source = Array.isArray(sequenceEntries) ? sequenceEntries : [];
+
+  const normalized = source
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+      const key = normalizeCategoryKey(item.key);
+      if (!selectedSet.has(key)) {
+        return null;
+      }
+      const minutes = normalizeMinutesInputValue(item.minutes);
+      if (minutes === null) {
+        return null;
+      }
+      return {
+        key,
+        minutes
+      };
+    })
+    .filter(Boolean);
+
+  if (!normalized.length) {
+    return fallback;
+  }
+
+  const sum = normalized.reduce((acc, item) => acc + item.minutes, 0);
+  if (sum !== total) {
+    return fallback;
+  }
+
+  const totalsByCategory = buildCategorySequenceTotals(normalized, keys);
+  if (!areMinuteAllocationsEqual(totalsByCategory, normalizedCategoryAllocations, keys)) {
+    return fallback;
+  }
+
+  return normalized;
+}
+
+function getTaskResolvedCategorySequence(task) {
+  const categories = getTaskCategories(task);
+  const totalMinutes = getTaskDurationMinutes(task);
+  const categoryAllocations = getTaskCategoryAllocations(task);
+  return sanitizeTaskCategorySequence(
+    task && task.categorySequence,
+    categories,
+    totalMinutes,
+    categoryAllocations
+  );
+}
+
+function hasCustomTaskCategorySequence(task) {
+  const categories = getTaskCategories(task);
+  const totalMinutes = getTaskDurationMinutes(task);
+  const categoryAllocations = getTaskCategoryAllocations(task);
+  const resolved = sanitizeTaskCategorySequence(
+    task && task.categorySequence,
+    categories,
+    totalMinutes,
+    categoryAllocations
+  );
+  const defaults = buildDefaultTaskCategorySequenceEntries(categories, totalMinutes, categoryAllocations);
+  return JSON.stringify(resolved) !== JSON.stringify(defaults);
+}
+
+function getTaskCategorySequenceOverlapEntries(task, overlapMinutes, taskElapsedBeforeOverlapMinutes = 0) {
+  const overlap = Math.max(0, Number(overlapMinutes) || 0);
+  const sequence = getTaskResolvedCategorySequence(task);
+  const totalMinutes = getTaskDurationMinutes(task);
+  if (!sequence.length || overlap <= 0 || totalMinutes <= 0) {
+    return [];
+  }
+
+  let elapsed = Math.max(0, Math.min(totalMinutes, Number(taskElapsedBeforeOverlapMinutes) || 0));
+  let remaining = overlap;
+  const entries = [];
+
+  sequence.forEach((item) => {
+    if (remaining <= 0) {
+      return;
+    }
+    const allocated = Math.max(0, Number(item.minutes) || 0);
+    if (allocated <= 0) {
+      return;
+    }
+    if (elapsed >= allocated) {
+      elapsed -= allocated;
+      return;
+    }
+
+    const available = allocated - elapsed;
+    const consumed = Math.min(available, remaining);
+    if (consumed > 0) {
+      entries.push({
+        key: item.key,
+        minutes: consumed
+      });
+      remaining -= consumed;
+    }
+    elapsed = 0;
+  });
+
+  if (remaining > 0 && sequence.length) {
+    entries.push({
+      key: sequence[sequence.length - 1].key,
+      minutes: remaining
+    });
+  }
+
+  return entries;
 }
 
 function getTaskDurationMinutesFromForm() {
@@ -3346,7 +3644,7 @@ function updateTaskCategoryAllocationCaption(keys, draft) {
   applyAllocationCaptionStatusClass(refs.taskCategoryAllocationCaption, "error");
 }
 
-function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesFromForm()) {
+function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesFromForm(), draftOverride = null) {
   if (!refs.taskCategoryAllocationPanel || !refs.taskCategoryAllocationList || !refs.taskCategoryAllocationCaption) {
     return;
   }
@@ -3365,7 +3663,9 @@ function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesF
     return;
   }
 
-  const draft = getCategoryAllocationDraftForForm(keys, totalMinutes);
+  const draft = draftOverride && typeof draftOverride === "object"
+    ? draftOverride
+    : getCategoryAllocationDraftForForm(keys, totalMinutes);
   refs.taskCategoryAllocationPanel.classList.remove("is-hidden");
   updateTaskCategoryAllocationCaption(keys, draft);
 
@@ -3427,7 +3727,9 @@ function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesF
         }
       }
 
-      updateTaskCategoryAllocationCaption(keys, getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()));
+      const latestDraft = getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm());
+      updateTaskCategoryAllocationCaption(keys, latestDraft);
+      renderTaskCategorySequencePanel(keys, latestDraft);
       renderTaskSubcategoryPanel(keys);
       persistTaskFormDraft();
     });
@@ -3444,10 +3746,211 @@ function renderTaskCategoryAllocationPanel(selectedKeys = getSelectedCategoriesF
   });
 }
 
+function updateTaskCategorySequenceCaption(keys, draft) {
+  if (!refs.taskCategorySequenceCaption) {
+    return;
+  }
+  if (!keys.length) {
+    refs.taskCategorySequenceCaption.textContent = "选择类别后可编辑时序分段";
+    applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "");
+    return;
+  }
+  if (!draft.entries.length) {
+    refs.taskCategorySequenceCaption.textContent = "请至少保留一个时序分段";
+    applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "warn");
+    return;
+  }
+  if (draft.remaining > 0) {
+    refs.taskCategorySequenceCaption.textContent = `时序分段还需分配 ${formatDuration(draft.remaining)}`;
+    applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "warn");
+    return;
+  }
+  if (draft.remaining < 0) {
+    refs.taskCategorySequenceCaption.textContent = `时序分段超出 ${formatDuration(Math.abs(draft.remaining))}`;
+    applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "error");
+    return;
+  }
+  if (!draft.categoriesMatch) {
+    refs.taskCategorySequenceCaption.textContent = "时序分段汇总需与上方类别时长分配一致";
+    applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "error");
+    return;
+  }
+  refs.taskCategorySequenceCaption.textContent = `时序分段已匹配总时长 ${formatDuration(draft.sum)}`;
+  applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "ok");
+}
+
+function renderTaskCategorySequencePanel(
+  selectedKeys = getSelectedCategoriesFromForm(),
+  categoryDraft = null
+) {
+  if (
+    !refs.taskCategorySequencePanel
+    || !refs.taskCategorySequenceList
+    || !refs.taskCategorySequenceCaption
+  ) {
+    return;
+  }
+
+  const keys = sanitizeCategoryKeys(selectedKeys);
+  refs.taskCategorySequenceList.innerHTML = "";
+
+  if (refs.taskCategorySequenceToggle) {
+    refs.taskCategorySequenceToggle.disabled = !keys.length;
+    refs.taskCategorySequenceToggle.checked = keys.length > 0 && state.taskCategorySequenceEnabled === true;
+  }
+
+  if (!keys.length) {
+    refs.taskCategorySequencePanel.classList.add("is-hidden");
+    if (refs.taskCategorySequenceBody) {
+      refs.taskCategorySequenceBody.classList.add("is-hidden");
+    }
+    updateTaskCategorySequenceCaption([], {
+      entries: [],
+      sum: 0,
+      remaining: 0,
+      categoriesMatch: true
+    });
+    if (refs.taskCategorySequenceAddBtn) {
+      refs.taskCategorySequenceAddBtn.disabled = true;
+      refs.taskCategorySequenceAddBtn.onclick = null;
+    }
+    return;
+  }
+
+  refs.taskCategorySequencePanel.classList.remove("is-hidden");
+  if (refs.taskCategorySequenceBody) {
+    refs.taskCategorySequenceBody.classList.toggle("is-hidden", state.taskCategorySequenceEnabled !== true);
+  }
+
+  if (state.taskCategorySequenceEnabled !== true) {
+    refs.taskCategorySequenceCaption.textContent = "时序分段已关闭，开启后才会启用并参与校验";
+    applyAllocationCaptionStatusClass(refs.taskCategorySequenceCaption, "");
+    if (refs.taskCategorySequenceAddBtn) {
+      refs.taskCategorySequenceAddBtn.disabled = true;
+      refs.taskCategorySequenceAddBtn.onclick = null;
+    }
+    return;
+  }
+
+  const totalMinutes = getTaskDurationMinutesFromForm();
+  const resolvedCategoryDraft = categoryDraft && typeof categoryDraft === "object"
+    ? categoryDraft
+    : getCategoryAllocationDraftForForm(keys, totalMinutes);
+  const sequenceDraft = getCategorySequenceDraftForForm(keys, totalMinutes, resolvedCategoryDraft.allocations);
+  updateTaskCategorySequenceCaption(keys, sequenceDraft);
+
+  if (refs.taskCategorySequenceAddBtn) {
+    refs.taskCategorySequenceAddBtn.disabled = false;
+    refs.taskCategorySequenceAddBtn.onclick = () => {
+      const defaultKey = keys[0];
+      state.taskCategorySequenceInputs.push({
+        key: defaultKey,
+        minutes: "0"
+      });
+      renderTaskCategorySequencePanel(keys, getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()));
+      persistTaskFormDraft();
+    };
+  }
+
+  state.taskCategorySequenceInputs.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "task-category-sequence-item";
+
+    const select = document.createElement("select");
+    select.className = "task-category-sequence-select";
+    keys.forEach((key, keyIndex) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = getCategoryLabelByKey(key);
+      option.style.background = getCategoryColorByKey(key, keyIndex);
+      if (item.key === key) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
+    select.addEventListener("change", (event) => {
+      state.taskCategorySequenceInputs[index].key = normalizeCategoryKey(event.target.value);
+      renderTaskCategorySequencePanel(keys, getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()));
+      persistTaskFormDraft();
+    });
+    const minutesInput = document.createElement("input");
+    minutesInput.className = "task-category-sequence-input";
+    minutesInput.type = "number";
+    minutesInput.min = "0";
+    minutesInput.step = "1";
+    minutesInput.inputMode = "numeric";
+    minutesInput.value = item.minutes;
+    minutesInput.addEventListener("input", (event) => {
+      state.taskCategorySequenceInputs[index].minutes = event.target.value;
+      updateTaskCategorySequenceCaption(
+        keys,
+        getCategorySequenceDraftForForm(keys, getTaskDurationMinutesFromForm(), getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()).allocations)
+      );
+      persistTaskFormDraft();
+    });
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "secondary task-category-sequence-remove-btn";
+    removeBtn.textContent = "\u5220\u9664";
+    removeBtn.disabled = state.taskCategorySequenceInputs.length <= 1;
+    removeBtn.addEventListener("click", () => {
+      state.taskCategorySequenceInputs.splice(index, 1);
+      renderTaskCategorySequencePanel(keys, getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm()));
+      persistTaskFormDraft();
+    });
+
+    row.appendChild(select);
+    row.appendChild(minutesInput);
+    row.appendChild(removeBtn);
+    refs.taskCategorySequenceList.appendChild(row);
+  });
+}
+
 function setTaskCategoryAllocationInputsToForm(allocationInputs, categoryKeys = getSelectedCategoriesFromForm()) {
   const selected = sanitizeCategoryKeys(categoryKeys);
   state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(allocationInputs, selected);
   ensureCategoryAllocationInputDefaults(selected, getTaskDurationMinutesFromForm());
+}
+
+function setTaskCategorySequenceInputsToForm(
+  sequenceInputs,
+  categoryKeys = getSelectedCategoriesFromForm(),
+  categoryAllocations = null
+) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  const totalMinutes = getTaskDurationMinutesFromForm();
+  const baseAllocations = categoryAllocations && typeof categoryAllocations === "object"
+    ? categoryAllocations
+    : getCategoryAllocationDraftForForm(selected, totalMinutes).allocations;
+  state.taskCategorySequenceInputs = sanitizeTaskCategorySequenceInputs(sequenceInputs, selected);
+  ensureTaskCategorySequenceInputDefaults(selected, totalMinutes, baseAllocations);
+}
+
+function setTaskCategorySequenceEnabled(
+  enabled,
+  {
+    skipRender = false,
+    skipPersist = false,
+    selectedKeys = null,
+    categoryDraft = null
+  } = {}
+) {
+  state.taskCategorySequenceEnabled = enabled === true;
+  if (refs.taskCategorySequenceToggle) {
+    refs.taskCategorySequenceToggle.checked = state.taskCategorySequenceEnabled;
+  }
+
+  if (!skipRender) {
+    const keys = Array.isArray(selectedKeys) ? selectedKeys : getSelectedCategoriesFromForm();
+    const draft = categoryDraft && typeof categoryDraft === "object"
+      ? categoryDraft
+      : getCategoryAllocationDraftForForm(keys, getTaskDurationMinutesFromForm());
+    renderTaskCategorySequencePanel(keys, draft);
+  }
+
+  if (!skipPersist) {
+    persistTaskFormDraft();
+  }
 }
 
 function setTaskSubcategoryAllocationInputsToForm(
@@ -3475,6 +3978,42 @@ function getTaskCategoryAllocationsForSubmit(categoryKeys, totalMinutes) {
   }
   return {
     allocations: normalizeMinuteAllocationMap(draft.allocations, selected, total),
+    message: ""
+  };
+}
+
+function getTaskCategorySequenceForSubmit(categoryKeys, totalMinutes, categoryAllocations) {
+  const selected = sanitizeCategoryKeys(categoryKeys);
+  const total = Math.max(0, Math.round(totalMinutes));
+  const normalizedCategoryAllocations = normalizeMinuteAllocationMap(categoryAllocations, selected, total);
+  if (state.taskCategorySequenceEnabled !== true) {
+    return {
+      sequence: sanitizeTaskCategorySequence([], selected, total, normalizedCategoryAllocations),
+      message: ""
+    };
+  }
+  const draft = getCategorySequenceDraftForForm(selected, total, normalizedCategoryAllocations);
+  if (!draft.entries.length) {
+    return {
+      sequence: null,
+      message: "请至少填写一个类别时序分段。"
+    };
+  }
+  if (draft.sum !== total) {
+    return {
+      sequence: null,
+      message: `类别时序分段需等于总时长（当前总时长 ${formatDuration(total)}，已分配 ${formatDuration(draft.sum)}）。`
+    };
+  }
+  if (!draft.categoriesMatch) {
+    return {
+      sequence: null,
+      message: "类别时序分段汇总需与“类别时长分配”一致。"
+    };
+  }
+
+  return {
+    sequence: sanitizeTaskCategorySequence(draft.entries, selected, total, normalizedCategoryAllocations),
     message: ""
   };
 }
@@ -3552,7 +4091,10 @@ function setSelectedTaskSubcategoryDetailsToForm(
 
 function renderCategorySummary() {
   const selected = getSelectedCategoriesFromForm();
-  renderTaskCategoryAllocationPanel(selected);
+  const totalMinutes = getTaskDurationMinutesFromForm();
+  const categoryDraft = getCategoryAllocationDraftForForm(selected, totalMinutes);
+  renderTaskCategoryAllocationPanel(selected, categoryDraft);
+  renderTaskCategorySequencePanel(selected, categoryDraft);
   renderTaskSubcategoryPanel(selected);
   if (!refs.taskCategorySummary) {
     return;
@@ -3593,11 +4135,11 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
   }
 
   if (!isCategoryPickerOpen) {
-    refs.taskSubcategoryCaption.textContent = "展开“任务类别”后显示";
+    refs.taskSubcategoryCaption.textContent = "灞曞紑鈥滀换鍔＄被鍒€濆悗鏄剧ず";
     return;
   }
 
-  refs.taskSubcategoryCaption.textContent = `当前展示 ${groups.length} 个大类的小类`;
+  refs.taskSubcategoryCaption.textContent = `当前显示 ${groups.length} 个大类的小类`;
 
   groups.forEach((group, index) => {
     const section = document.createElement("section");
@@ -3663,7 +4205,7 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
 
         const blockTitle = document.createElement("div");
         blockTitle.className = "task-subdetail-title";
-        blockTitle.textContent = `${option.label} · 细分`;
+        blockTitle.textContent = `${option.label} 路 缁嗗垎`;
 
         const chips = document.createElement("div");
         chips.className = "task-subdetail-chip-wrap";
@@ -3707,12 +4249,12 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
         );
 
         if (selectedSubcategoryOptions.length === 1) {
-          caption.textContent = `单个小类自动分配 ${formatDuration(latestDraft.total)}`;
+          caption.textContent = `鍗曚釜灏忕被鑷姩鍒嗛厤 ${formatDuration(latestDraft.total)}`;
           applyAllocationCaptionStatusClass(caption, "ok");
           return;
         }
         if (latestDraft.remaining === 0) {
-          caption.textContent = `小类已分配完成：${formatDuration(latestDraft.sum)} / ${formatDuration(latestDraft.total)}`;
+          caption.textContent = `灏忕被宸插垎閰嶅畬鎴愶細${formatDuration(latestDraft.sum)} / ${formatDuration(latestDraft.total)}`;
           applyAllocationCaptionStatusClass(caption, "ok");
           return;
         }
@@ -3721,7 +4263,7 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
           applyAllocationCaptionStatusClass(caption, "warn");
           return;
         }
-        caption.textContent = `小类超出 ${formatDuration(Math.abs(latestDraft.remaining))}，请调回 ${formatDuration(latestDraft.total)}`;
+        caption.textContent = `灏忕被瓒呭嚭 ${formatDuration(Math.abs(latestDraft.remaining))}锛岃璋冨洖 ${formatDuration(latestDraft.total)}`;
         applyAllocationCaptionStatusClass(caption, "error");
       };
       updateCaption();
@@ -3841,7 +4383,7 @@ function normalizeTaskCategorySubcategoryDetails(subcategoryKey, details, fallba
     if (!item || typeof item !== "object") {
       return;
     }
-    const label = normalizeCategoryLabel(item.label, `细分${index + 1}`);
+    const label = normalizeCategoryLabel(item.label, `缁嗗垎${index + 1}`);
     const seed = item.key || `${subcategoryKey}_${label}`;
     let key = normalizeCategoryKey(seed) || `${normalizeCategoryKey(subcategoryKey) || "detail"}_detail_${index + 1}`;
     let duplicateIndex = 1;
@@ -4269,7 +4811,7 @@ function renderCategoryManager() {
     colorInput.type = "color";
     colorInput.className = "category-manager-color";
     colorInput.value = normalizeCategoryColor(definition.color, DEFAULT_CATEGORY_COLOR);
-    colorInput.title = "类别颜色";
+    colorInput.title = "绫诲埆棰滆壊";
     colorInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { color: colorInput.value }, { skipManagerRerender: true });
     });
@@ -4279,7 +4821,7 @@ function renderCategoryManager() {
     nameInput.className = "category-manager-name";
     nameInput.maxLength = 24;
     nameInput.value = definition.label;
-    nameInput.placeholder = "类别名称";
+    nameInput.placeholder = "绫诲埆鍚嶇О";
     nameInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { label: nameInput.value }, { skipManagerRerender: true });
     });
@@ -4291,8 +4833,8 @@ function renderCategoryManager() {
     const dragHandle = document.createElement("button");
     dragHandle.type = "button";
     dragHandle.className = "category-manager-drag-handle";
-    dragHandle.textContent = "拖拽";
-    dragHandle.title = "拖拽排序";
+    dragHandle.textContent = "鎷栨嫿";
+    dragHandle.title = "鎷栨嫿鎺掑簭";
     dragHandle.setAttribute("draggable", "true");
     dragHandle.addEventListener("dragstart", (event) => {
       state.draggingCategoryKey = definition.key;
@@ -4315,7 +4857,7 @@ function renderCategoryManager() {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "danger category-manager-delete";
-    deleteBtn.textContent = "删除";
+    deleteBtn.textContent = "鍒犻櫎";
     deleteBtn.addEventListener("click", () => {
       deleteCategoryDefinition(definition.key);
     });
@@ -4476,6 +5018,12 @@ function deleteCategoryDefinition(targetKey) {
       nextCategories,
       nextCategoryAllocations
     );
+    const nextCategorySequence = sanitizeTaskCategorySequence(
+      task.categorySequence,
+      nextCategories,
+      durationMinutes,
+      nextCategoryAllocations
+    );
     const nextSubcategoryDetails = sanitizeTaskSubcategoryDetailSelections(
       task.subcategoryDetails,
       nextSubcategories,
@@ -4486,7 +5034,15 @@ function deleteCategoryDefinition(targetKey) {
     const subcategoryDetailsUnchanged = JSON.stringify(task.subcategoryDetails || {}) === JSON.stringify(nextSubcategoryDetails);
     const categoryAllocationsUnchanged = JSON.stringify(task.categoryAllocations || {}) === JSON.stringify(nextCategoryAllocations);
     const subcategoryAllocationsUnchanged = JSON.stringify(task.subcategoryAllocations || {}) === JSON.stringify(nextSubcategoryAllocations);
-    if (categoriesUnchanged && subcategoriesUnchanged && subcategoryDetailsUnchanged && categoryAllocationsUnchanged && subcategoryAllocationsUnchanged) {
+    const categorySequenceUnchanged = JSON.stringify(task.categorySequence || []) === JSON.stringify(nextCategorySequence);
+    if (
+      categoriesUnchanged
+      && subcategoriesUnchanged
+      && subcategoryDetailsUnchanged
+      && categoryAllocationsUnchanged
+      && subcategoryAllocationsUnchanged
+      && categorySequenceUnchanged
+    ) {
       return task;
     }
     remappedTaskCount += 1;
@@ -4494,6 +5050,7 @@ function deleteCategoryDefinition(targetKey) {
       ...task,
       categories: nextCategories,
       categoryAllocations: nextCategoryAllocations,
+      categorySequence: nextCategorySequence,
       subcategories: nextSubcategories,
       subcategoryDetails: nextSubcategoryDetails,
       subcategoryAllocations: nextSubcategoryAllocations
@@ -4580,6 +5137,12 @@ function normalizeTask(input) {
     normalizedCategories,
     durationMinutes
   );
+  const categorySequence = sanitizeTaskCategorySequence(
+    input.categorySequence,
+    normalizedCategories,
+    durationMinutes,
+    categoryAllocations
+  );
   const subcategories = sanitizeTaskSubcategorySelections(input.subcategories, normalizedCategories);
   const subcategoryAllocations = sanitizeTaskSubcategoryAllocations(
     input.subcategoryAllocations,
@@ -4615,6 +5178,7 @@ function normalizeTask(input) {
     sessions,
     categories: normalizedCategories,
     categoryAllocations,
+    categorySequence,
     subcategories,
     subcategoryDetails,
     subcategoryAllocations,
@@ -5016,19 +5580,21 @@ function getSequentialOverlapAllocations(keys, totalAllocations, overlapMinutes,
 function getTaskCategoryOverlapAllocations(task, overlapMinutes, taskElapsedBeforeOverlapMinutes = 0) {
   const categories = getTaskCategories(task);
   const overlap = Math.max(0, Number(overlapMinutes) || 0);
-  const durationMinutes = getTaskDurationMinutes(task);
   if (!categories.length || overlap <= 0) {
     return {};
   }
-
-  const totalAllocations = getTaskCategoryAllocations(task);
-  return getSequentialOverlapAllocations(
-    categories,
-    totalAllocations,
+  const result = Object.fromEntries(categories.map((key) => [key, 0]));
+  const sequenceOverlapEntries = getTaskCategorySequenceOverlapEntries(
+    task,
     overlap,
-    taskElapsedBeforeOverlapMinutes,
-    durationMinutes
+    taskElapsedBeforeOverlapMinutes
   );
+  sequenceOverlapEntries.forEach((entry) => {
+    if (Object.prototype.hasOwnProperty.call(result, entry.key)) {
+      result[entry.key] += entry.minutes;
+    }
+  });
+  return result;
 }
 
 function getPrimaryCategory(task) {
@@ -5188,8 +5754,8 @@ function onSubmitTask(event) {
     return;
   }
 
-  if (task.detail.length > 300) {
-    alert("\u4EFB\u52A1\u8BE6\u60C5\u4E0D\u80FD\u8D85\u8FC7300\u5B57\u3002");
+  if (task.detail.length > 500) {
+    alert("\u4EFB\u52A1\u8BE6\u60C5\u4E0D\u80FD\u8D85\u8FC7500\u5B57\u3002");
     return;
   }
 
@@ -5221,6 +5787,16 @@ function onSubmitTask(event) {
     return;
   }
   task.categoryAllocations = categoryAllocationResult.allocations;
+  const categorySequenceResult = getTaskCategorySequenceForSubmit(
+    task.categories,
+    duration,
+    task.categoryAllocations
+  );
+  if (!categorySequenceResult.sequence) {
+    alert(categorySequenceResult.message || "请检查类别时序分段。");
+    return;
+  }
+  task.categorySequence = categorySequenceResult.sequence;
 
   const subcategoryAllocationResult = getTaskSubcategoryAllocationsForSubmit(
     task.subcategories,
@@ -5263,6 +5839,8 @@ function resetForm() {
   setSelectedProcessScoreToForm("");
   setOptionalTagMode(DEFAULT_OPTIONAL_TAG_MODE);
   state.taskCategoryAllocationInputs = {};
+  state.taskCategorySequenceInputs = [];
+  setTaskCategorySequenceEnabled(false, { skipRender: true, skipPersist: true });
   state.taskSubcategoryAllocationInputs = {};
   state.taskSubcategoryDetailSelections = {};
   setSelectedTaskSubcategoriesToForm({});
@@ -5278,7 +5856,7 @@ function resetForm() {
 }
 
 function updateDetailCount() {
-  refs.detailCount.textContent = `${refs.taskDetail.value.length}/300`;
+  refs.detailCount.textContent = `${refs.taskDetail.value.length}/500`;
 }
 
 function updateDurationPreview() {
@@ -5532,6 +6110,26 @@ function setTaskCategoryMode(mode) {
   renderTaskCategoryPage();
 }
 
+function shiftTaskCategoryWeek(weekOffset) {
+  const offset = Number(weekOffset);
+  if (!Number.isFinite(offset) || offset === 0) {
+    return;
+  }
+  const base = parseDateTime(`${getTaskCategoryDateValue()}T00:00`) || new Date();
+  base.setDate(base.getDate() + Math.trunc(offset) * 7);
+  const nextDate = toDateInputValue(base);
+  state.taskCategoryDate = nextDate;
+  state.selectedDate = nextDate;
+  if (refs.taskCategoryDate) {
+    refs.taskCategoryDate.value = nextDate;
+  }
+  if (refs.selectedDate) {
+    refs.selectedDate.value = nextDate;
+  }
+  renderAllocationOverview();
+  renderTaskCategoryPage();
+}
+
 function applyTaskCategoryMode(dayValue) {
   const isWeekMode = state.taskCategoryMode === "week";
   if (refs.taskCategoryModeDayBtn) {
@@ -5543,8 +6141,10 @@ function applyTaskCategoryMode(dayValue) {
   if (refs.taskCategoryDate) {
     refs.taskCategoryDate.classList.toggle("is-hidden", isWeekMode);
   }
+  if (refs.taskCategoryPeriodControl) {
+    refs.taskCategoryPeriodControl.classList.toggle("is-hidden", !isWeekMode);
+  }
   if (refs.taskCategorySelectedWeek) {
-    refs.taskCategorySelectedWeek.classList.toggle("is-hidden", !isWeekMode);
     if (isWeekMode) {
       const base = parseDateTime(`${dayValue}T00:00`) || new Date();
       const weekInfo = getIsoWeekInfo(base);
@@ -5608,6 +6208,7 @@ function computeTaskCategoryStats(day, periodContext = getTaskCategoryPeriodCont
   const trackedGroupKeys = new Set(groups.map((group) => group.key));
 
   let usedMinutes = 0;
+  const totalRecordedMinutes = getOccupiedMinutesInRange(targetRange.start, targetRange.end);
 
   state.tasks.forEach((task) => {
     if (isTaskInTrash(task)) {
@@ -5615,14 +6216,29 @@ function computeTaskCategoryStats(day, periodContext = getTaskCategoryPeriodCont
     }
     const taskCategories = getTaskCategories(task);
     const taskCategoryAllocations = getTaskCategoryAllocations(task);
-    const categoryOffsets = {};
+    const taskCategorySequence = getTaskResolvedCategorySequence(task);
+    const categoryWindowsByKey = {};
+    const categoryElapsedByKey = {};
     let categoryCursor = 0;
-    taskCategories.forEach((categoryKey) => {
-      const allocated = Math.max(0, Number(taskCategoryAllocations[categoryKey]) || 0);
-      categoryOffsets[categoryKey] = {
+    taskCategorySequence.forEach((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return;
+      }
+      const categoryKey = normalizeCategoryKey(entry.key);
+      const allocated = Math.max(0, Number(entry.minutes) || 0);
+      if (!taskCategories.includes(categoryKey) || allocated <= 0) {
+        return;
+      }
+      if (!Object.prototype.hasOwnProperty.call(categoryWindowsByKey, categoryKey)) {
+        categoryWindowsByKey[categoryKey] = [];
+      }
+      const elapsedBeforeWindow = Math.max(0, Number(categoryElapsedByKey[categoryKey]) || 0);
+      categoryWindowsByKey[categoryKey].push({
         start: categoryCursor,
-        duration: allocated
-      };
+        duration: allocated,
+        elapsedBeforeWindow
+      });
+      categoryElapsedByKey[categoryKey] = elapsedBeforeWindow + allocated;
       categoryCursor += allocated;
     });
     const taskText = `${task.name || ""} ${task.detail || ""}`;
@@ -5675,23 +6291,40 @@ function computeTaskCategoryStats(day, periodContext = getTaskCategoryPeriodCont
             selectedSubcategories,
             categoryTotalMinutes
           );
-          const categoryOffset = categoryOffsets[group.key];
-          const categoryStart = categoryOffset ? categoryOffset.start : 0;
           const overlapStartInTask = elapsedBeforeOverlapMinutes;
           const overlapEndInTask = elapsedBeforeOverlapMinutes + overlapMinutes;
-          const categoryStartInTask = categoryStart;
-          const categoryEndInTask = categoryStartInTask + categoryTotalMinutes;
-          const categoryOverlapStartInTask = Math.max(overlapStartInTask, categoryStartInTask);
-          const categoryOverlapEndInTask = Math.min(overlapEndInTask, categoryEndInTask);
-          const categoryOverlapMinutes = Math.max(0, categoryOverlapEndInTask - categoryOverlapStartInTask);
-          const elapsedBeforeCategoryOverlap = Math.max(0, categoryOverlapStartInTask - categoryStartInTask);
-          const subcategoryOverlapTotals = getSequentialOverlapAllocations(
-            selectedSubcategories,
-            normalizedSubcategoryTotals,
-            categoryOverlapMinutes,
-            elapsedBeforeCategoryOverlap,
-            categoryTotalMinutes
-          );
+          const groupWindows = Array.isArray(categoryWindowsByKey[group.key]) ? categoryWindowsByKey[group.key] : [];
+          const groupOverlapChunks = [];
+          groupWindows.forEach((window) => {
+            const windowStart = window.start;
+            const windowEnd = windowStart + window.duration;
+            const overlapStart = Math.max(overlapStartInTask, windowStart);
+            const overlapEnd = Math.min(overlapEndInTask, windowEnd);
+            if (overlapEnd <= overlapStart) {
+              return;
+            }
+            groupOverlapChunks.push({
+              overlapMinutes: overlapEnd - overlapStart,
+              elapsedBeforeGroupOverlap: window.elapsedBeforeWindow + (overlapStart - windowStart)
+            });
+          });
+          if (!groupOverlapChunks.length) {
+            return;
+          }
+
+          const subcategoryOverlapTotals = Object.fromEntries(selectedSubcategories.map((key) => [key, 0]));
+          groupOverlapChunks.forEach((chunk) => {
+            const partial = getSequentialOverlapAllocations(
+              selectedSubcategories,
+              normalizedSubcategoryTotals,
+              chunk.overlapMinutes,
+              chunk.elapsedBeforeGroupOverlap,
+              categoryTotalMinutes
+            );
+            selectedSubcategories.forEach((subcategoryKey) => {
+              subcategoryOverlapTotals[subcategoryKey] += partial[subcategoryKey] || 0;
+            });
+          });
 
           targets.forEach((subcategoryKey) => {
             if (!Object.prototype.hasOwnProperty.call(group.subcategoryTotals, subcategoryKey)) {
@@ -5722,25 +6355,31 @@ function computeTaskCategoryStats(day, periodContext = getTaskCategoryPeriodCont
             if (subcategoryTotalMinutes <= 0) {
               return;
             }
-
-            const subcategoryStartInTask = categoryStartInTask + (subcategoryOffset ? subcategoryOffset.start : 0);
-            const subcategoryEndInTask = subcategoryStartInTask + subcategoryTotalMinutes;
-            const subcategoryOverlapStartInTask = Math.max(overlapStartInTask, subcategoryStartInTask);
-            const subcategoryOverlapEndInTask = Math.min(overlapEndInTask, subcategoryEndInTask);
-            const subcategoryOverlapMinutes = Math.max(0, subcategoryOverlapEndInTask - subcategoryOverlapStartInTask);
-            if (subcategoryOverlapMinutes <= 0) {
-              return;
-            }
-
-            const elapsedBeforeSubcategoryOverlap = Math.max(0, subcategoryOverlapStartInTask - subcategoryStartInTask);
+            const subcategoryStartInGroup = subcategoryOffset ? subcategoryOffset.start : 0;
+            const subcategoryEndInGroup = subcategoryStartInGroup + subcategoryTotalMinutes;
             const detailAllocations = buildEvenMinuteAllocation(detailKeys, Math.round(subcategoryTotalMinutes));
-            const detailOverlapTotals = getSequentialOverlapAllocations(
-              detailKeys,
-              detailAllocations,
-              subcategoryOverlapMinutes,
-              elapsedBeforeSubcategoryOverlap,
-              subcategoryTotalMinutes
-            );
+            const detailOverlapTotals = Object.fromEntries(detailKeys.map((detailKey) => [detailKey, 0]));
+            groupOverlapChunks.forEach((chunk) => {
+              const chunkStartInGroup = chunk.elapsedBeforeGroupOverlap;
+              const chunkEndInGroup = chunkStartInGroup + chunk.overlapMinutes;
+              const overlapStartInSubcategory = Math.max(chunkStartInGroup, subcategoryStartInGroup);
+              const overlapEndInSubcategory = Math.min(chunkEndInGroup, subcategoryEndInGroup);
+              const overlapMinutesInSubcategory = Math.max(0, overlapEndInSubcategory - overlapStartInSubcategory);
+              if (overlapMinutesInSubcategory <= 0) {
+                return;
+              }
+              const elapsedBeforeSubcategoryOverlap = overlapStartInSubcategory - subcategoryStartInGroup;
+              const partial = getSequentialOverlapAllocations(
+                detailKeys,
+                detailAllocations,
+                overlapMinutesInSubcategory,
+                elapsedBeforeSubcategoryOverlap,
+                subcategoryTotalMinutes
+              );
+              detailKeys.forEach((detailKey) => {
+                detailOverlapTotals[detailKey] += partial[detailKey] || 0;
+              });
+            });
 
             detailKeys.forEach((detailKey) => {
               if (!Object.prototype.hasOwnProperty.call(group.subcategoryDetailTotals[subcategoryKey] || {}, detailKey)) {
@@ -5786,6 +6425,7 @@ function computeTaskCategoryStats(day, periodContext = getTaskCategoryPeriodCont
     mode: periodContext.mode || "day",
     mainlineLabel: periodContext.mainlineLabel || "今日主线",
     usedMinutes,
+    totalRecordedMinutes,
     activeGroupCount: activeGroups.length,
     topGroup,
     groups: orderedGroups
@@ -5797,15 +6437,19 @@ function renderTaskCategorySummary(stats) {
 
   const topLabel = stats.topGroup && stats.topGroup.totalMinutes > 0
     ? `${stats.topGroup.icon} ${stats.topGroup.label}`
-    : "\u6682\u65E0";
+    : "暂无";
   const topDuration = stats.topGroup && stats.topGroup.totalMinutes > 0
     ? formatDuration(stats.topGroup.totalMinutes)
+    : "--";
+  const categoryShare = stats.totalRecordedMinutes > 0
+    ? `${((stats.usedMinutes / stats.totalRecordedMinutes) * 100).toFixed(1)}%`
     : "--";
 
   const items = [
     { label: "八大类时长", value: formatDuration(stats.usedMinutes) },
-    { label: "\u5DF2\u6FC0\u6D3B\u5927\u7C7B", value: `${stats.activeGroupCount}/${getTaskCategoryGroups().length}` },
-    { label: stats.mainlineLabel || "\u4ECA\u65E5\u4E3B\u7EBF", value: `${topLabel} ${topDuration}` }
+    { label: "八大类占比", value: categoryShare },
+    { label: "已激活大类", value: `${stats.activeGroupCount}/${getTaskCategoryGroups().length}` },
+    { label: stats.mainlineLabel || "今日主线", value: `${topLabel} ${topDuration}` }
   ];
 
   items.forEach((item) => {
@@ -6184,6 +6828,12 @@ function syncTaskSubcategoryConfigChanges() {
       categories,
       nextCategoryAllocations
     );
+    const nextCategorySequence = sanitizeTaskCategorySequence(
+      task.categorySequence,
+      categories,
+      getTaskDurationMinutes(task),
+      nextCategoryAllocations
+    );
     const nextSubcategoryDetails = sanitizeTaskSubcategoryDetailSelections(
       task.subcategoryDetails,
       nextSubcategories,
@@ -6195,12 +6845,15 @@ function syncTaskSubcategoryConfigChanges() {
     const categoryAllocNextSerialized = JSON.stringify(nextCategoryAllocations);
     const subcategoryAllocPrevSerialized = JSON.stringify(task.subcategoryAllocations || {});
     const subcategoryAllocNextSerialized = JSON.stringify(nextSubcategoryAllocations);
+    const categorySequencePrevSerialized = JSON.stringify(task.categorySequence || []);
+    const categorySequenceNextSerialized = JSON.stringify(nextCategorySequence);
     const subcategoryDetailsPrevSerialized = JSON.stringify(task.subcategoryDetails || {});
     const subcategoryDetailsNextSerialized = JSON.stringify(nextSubcategoryDetails);
     if (
       prevSerialized !== nextSerialized
       || categoryAllocPrevSerialized !== categoryAllocNextSerialized
       || subcategoryAllocPrevSerialized !== subcategoryAllocNextSerialized
+      || categorySequencePrevSerialized !== categorySequenceNextSerialized
       || subcategoryDetailsPrevSerialized !== subcategoryDetailsNextSerialized
     ) {
       tasksChanged = true;
@@ -6209,6 +6862,7 @@ function syncTaskSubcategoryConfigChanges() {
         subcategories: nextSubcategories,
         subcategoryDetails: nextSubcategoryDetails,
         categoryAllocations: nextCategoryAllocations,
+        categorySequence: nextCategorySequence,
         subcategoryAllocations: nextSubcategoryAllocations
       };
     }
@@ -6221,6 +6875,10 @@ function syncTaskSubcategoryConfigChanges() {
   );
   state.taskCategoryAllocationInputs = sanitizeTaskCategoryAllocationInputs(
     state.taskCategoryAllocationInputs,
+    getSelectedCategoriesFromForm()
+  );
+  state.taskCategorySequenceInputs = sanitizeTaskCategorySequenceInputs(
+    state.taskCategorySequenceInputs,
     getSelectedCategoriesFromForm()
   );
   state.taskSubcategoryAllocationInputs = sanitizeTaskSubcategoryAllocationInputs(
@@ -6338,7 +6996,7 @@ function addTaskCategorySubcategoryDetail(groupKey, subcategoryKey) {
   }
 
   const details = Array.isArray(target.details) ? target.details : [];
-  const label = `新细分${details.length + 1}`;
+  const label = `鏂扮粏鍒?{details.length + 1}`;
   details.push({
     key: createUniqueTaskCategorySubcategoryDetailKey(groupKey, subcategoryKey, label, details),
     label
@@ -6848,6 +7506,11 @@ function fillForm(task) {
   const categories = getTaskCategories(task);
   setSelectedCategoriesToForm(categories);
   setTaskCategoryAllocationInputsToForm(task.categoryAllocations, categories);
+  setTaskCategorySequenceInputsToForm(task.categorySequence, categories, task.categoryAllocations);
+  setTaskCategorySequenceEnabled(hasCustomTaskCategorySequence(task), {
+    skipRender: true,
+    skipPersist: true
+  });
   setSelectedTaskSubcategoriesToForm(task.subcategories, categories);
   setSelectedTaskSubcategoryDetailsToForm(task.subcategoryDetails, task.subcategories, categories);
   setTaskSubcategoryAllocationInputsToForm(task.subcategoryAllocations, task.subcategories, categories);
@@ -7275,56 +7938,34 @@ function renderDailyOverview() {
       const tooltipParts = [];
       
       segments.forEach((segment) => {
-        const categories = getTaskCategories(segment.task);
-        const totalAllocations = getTaskCategoryAllocations(segment.task);
-        
-        let elapsed = segment.taskElapsedBeforeSlot;
-        let remainingSlotMinutes = segment.overlapMinutes;
-        let catCurrentLeft = 0; // Track the accumulated minutes for categories within THIS segment
-        
-        categories.forEach((catKey, catIdx) => {
-          if (remainingSlotMinutes <= 0) return;
-          
-          const catTotal = totalAllocations[catKey] || 0;
-          
-          // Calculate how much of THIS category falls into the current slot
-          // We know 'elapsed' minutes of the task have already passed before reaching this category
-          let catMinutesInSlot = 0;
-          
-          if (elapsed >= catTotal) {
-            // This category was completely finished before this slot started
-            elapsed -= catTotal;
-          } else {
-            // This category has some minutes left to render
-            const catRemaining = catTotal - elapsed;
-            catMinutesInSlot = Math.min(catRemaining, remainingSlotMinutes);
-            
-            // We used up some slot time, and we used up all 'elapsed' time
-            remainingSlotMinutes -= catMinutesInSlot;
-            elapsed = 0; // Future categories won't have any 'elapsed' time to skip
-            
-            if (catMinutesInSlot > 0) {
-              const fill = document.createElement("span");
-              fill.className = "slot-fill";
-              fill.style.background = getCategoryColorByKey(catKey, catIdx);
-              
-              const widthPercent = (catMinutesInSlot / SLOT_MINUTES) * 100;
-              // Add segment.offsetMinutes to the starting left position so we don't start at 0 if the task doesn't start at the beginning of the slot.
-              // Also add any previously accumulated width for THIS segment via currentLeft.
-              // BUT for subsequent tasks in the same slot, segment.offsetMinutes is absolute to the slot start, so we shouldn't add currentLeft of PREVIOUS tasks!
-              // Wait, currentLeft is scoped to the whole slot right now. It should be scoped to the segment if we use offsetMinutes!
-              // Let's use offsetMinutes + accumulated category minutes inside this segment.
-              const baseLeft = ((segment.offsetMinutes + catCurrentLeft) / SLOT_MINUTES) * 100;
-              fill.style.left = `${baseLeft}%`;
-              fill.style.width = `${widthPercent}%`;
-              
-              catCurrentLeft += catMinutesInSlot;
-              el.appendChild(fill);
-            }
+        const overlapEntries = getTaskCategorySequenceOverlapEntries(
+          segment.task,
+          segment.overlapMinutes,
+          segment.taskElapsedBeforeSlot
+        );
+
+        let catCurrentLeft = 0;
+        overlapEntries.forEach((entry, entryIndex) => {
+          if (!entry || entry.minutes <= 0) {
+            return;
           }
+          const fill = document.createElement("span");
+          fill.className = "slot-fill";
+          fill.style.background = getCategoryColorByKey(entry.key, entryIndex);
+
+          const widthPercent = (entry.minutes / SLOT_MINUTES) * 100;
+          const baseLeft = ((segment.offsetMinutes + catCurrentLeft) / SLOT_MINUTES) * 100;
+          fill.style.left = `${baseLeft}%`;
+          fill.style.width = `${widthPercent}%`;
+
+          catCurrentLeft += entry.minutes;
+          el.appendChild(fill);
         });
 
-        tooltipParts.push(`${segment.task.name} (${getCategoryLabels(segment.task)} ${Math.round(segment.overlapMinutes)}m)`);
+        const overlapLabel = overlapEntries.length
+          ? overlapEntries.map((entry) => `${getCategoryLabelByKey(entry.key)} ${Math.round(entry.minutes)}m`).join(" -> ")
+          : `${getCategoryLabels(segment.task)} ${Math.round(segment.overlapMinutes)}m`;
+        tooltipParts.push(`${segment.task.name} (${overlapLabel})`);
       });
       el.title = `${startText}-${endText} | ${tooltipParts.join("\uFF1B")}`;
     } else {
@@ -7406,7 +8047,7 @@ function computeRangeStats(targetRange) {
   };
 }
 
-function renderWeekBars(categoryRanking, emptyText = "本周暂无类别时长分配记录") {
+function renderWeekBars(categoryRanking, emptyText = "鏈懆鏆傛棤绫诲埆鏃堕暱鍒嗛厤璁板綍") {
   if (!refs.weekBars) {
     return;
   }
@@ -7455,7 +8096,7 @@ function renderWeekBars(categoryRanking, emptyText = "本周暂无类别时长�
     item.appendChild(track);
     item.appendChild(hourText);
     item.appendChild(categoryLabel);
-    item.title = `${category.label} | 总时长 ${formatDuration(category.minutes)} | 排名 #${index + 1}`;
+    item.title = `${category.label} | 鎬绘椂闀?${formatDuration(category.minutes)} | 鎺掑悕 #${index + 1}`;
 
     refs.weekBars.appendChild(item);
   });
@@ -8035,6 +8676,8 @@ function normalizeDateInputValue(value) {
 function pad2(num) {
   return String(num).padStart(2, "0");
 }
+
+
 
 
 

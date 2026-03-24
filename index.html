@@ -191,9 +191,9 @@
         <label class="task-detail-field">
           <span class="field-label-inline">
             <span>任务详情（选填）</span>
-            <small id="detail-count">0/300</small>
+            <small id="detail-count">0/500</small>
           </span>
-          <textarea id="task-detail" maxlength="300" rows="5" placeholder="简要描述目标、输出和限制条件"></textarea>
+          <textarea id="task-detail" maxlength="500" rows="5" placeholder="简要描述目标、输出和限制条件"></textarea>
         </label>
 
         <section class="task-session-block" aria-label="任务时段">
@@ -219,6 +219,23 @@
                   <span id="task-category-allocation-caption" class="task-category-allocation-caption">多选时请填写各类别分配分钟数</span>
                 </div>
                 <div id="task-category-allocation-list" class="task-category-allocation-list"></div>
+                <section id="task-category-sequence-panel" class="task-category-sequence-panel is-hidden" aria-live="polite">
+                  <div class="task-category-sequence-head">
+                    <span class="task-category-sequence-title">类别时序分段（可重复）</span>
+                    <label class="task-category-sequence-toggle">
+                      <input id="task-category-sequence-toggle" type="checkbox" aria-label="启用类别时序分段">
+                      <span>启用</span>
+                    </label>
+                    <span id="task-category-sequence-caption" class="task-category-sequence-caption">可将同一类别拆成多段，按顺序填写每段分钟数</span>
+                  </div>
+                  <div id="task-category-sequence-body" class="task-category-sequence-body">
+                    <div id="task-category-sequence-list" class="task-category-sequence-list" aria-label="类别时序分段列表"></div>
+                    <div class="task-category-sequence-actions">
+                      <button type="button" id="task-category-sequence-add" class="secondary task-category-sequence-add-btn">+ 新增分段</button>
+                    </div>
+                    <p id="task-category-sequence-note" class="task-category-sequence-note">说明：同一类别可重复出现，多段分钟数会按填写顺序累计。</p>
+                  </div>
+                </section>
               </section>
             </details>
           </div>
@@ -365,10 +382,14 @@
             <button type="button" id="task-category-mode-day" class="switch-btn is-active">天</button>
             <button type="button" id="task-category-mode-week" class="switch-btn">周</button>
           </div>
-          <label id="task-category-page-date-label">
+          <div id="task-category-page-date-label">
             <input id="task-category-page-date" type="date" aria-label="查看日期">
-            <span id="task-category-selected-week" class="selected-week is-hidden">第--周</span>
-          </label>
+            <div id="task-category-period-control" class="period-control is-hidden">
+              <button id="task-category-prev-week-btn" type="button" class="secondary icon-btn" aria-label="查看上一周">&lt;</button>
+              <span id="task-category-selected-week" class="selected-week">第--周</span>
+              <button id="task-category-next-week-btn" type="button" class="secondary icon-btn" aria-label="查看下一周">&gt;</button>
+            </div>
+          </div>
           <button id="task-category-page-back-btn" type="button" class="secondary">返回看板</button>
         </div>
       </div>
