@@ -1,210 +1,499 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>24h浠诲姟鏁堢巼鐪嬫澘</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>24h任务效率看板</title>
+  <link rel="stylesheet" href="styles.css?v=20260317-03">
 </head>
 <body>
-  <main class="app">
+  <div class="global-menu" id="global-menu">
+    <button id="menu-toggle-btn" type="button" class="secondary">菜单</button>
+    <div id="menu-dropdown" class="menu-dropdown is-hidden" role="menu" aria-label="全局菜单">
+      <div class="menu-account-block">
+        <p class="menu-account-label">当前账号</p>
+        <p id="menu-account-value" class="menu-account-value">未登录</p>
+      </div>
+      <div class="menu-toggle-row" role="menuitem">
+        <span class="menu-toggle-label">🔊 语音效果</span>
+        <label class="menu-toggle-switch" for="menu-voice-toggle">
+          <input id="menu-voice-toggle" type="checkbox" aria-label="语音效果开关" checked>
+          <span class="menu-toggle-slider" aria-hidden="true"></span>
+        </label>
+      </div>
+      <button id="menu-bedtime-review-btn" type="button" class="menu-nav-row" role="menuitem">
+        <span class="menu-toggle-label">🌙 睡前回顾</span>
+        <span class="menu-nav-arrow" aria-hidden="true">›</span>
+      </button>
+      <button id="menu-task-category-btn" type="button" class="menu-nav-row" role="menuitem">
+        <span class="menu-toggle-label">🗂 任务分类</span>
+        <span class="menu-nav-arrow" aria-hidden="true">›</span>
+      </button>
+      <button id="menu-trash-btn" type="button" class="menu-nav-row" role="menuitem">
+        <span class="menu-toggle-label">🗑 回收站</span>
+        <span class="menu-nav-arrow" aria-hidden="true">›</span>
+      </button>
+      <div class="menu-divider" aria-hidden="true"></div>
+      <button id="menu-auth-btn" type="button" class="menu-action-btn" role="menuitem">登录</button>
+    </div>
+  </div>
+
+  <section id="login-page" class="login-page is-hidden" aria-hidden="true">
+    <div class="login-quote-wrap">
+      <div class="login-logo-shell">
+        <img id="login-logo" src="images/jieyou-logo.jpg" alt="JIEYOU Logo" class="login-logo">
+        <div id="login-logo-fallback" class="login-logo-fallback is-hidden">LOGO</div>
+      </div>
+      <p id="daily-quote-text" class="daily-quote-text"></p>
+      <p id="daily-quote-source" class="daily-quote-source"></p>
+    </div>
+
+    <section class="login-card" aria-label="邮箱登录">
+      <button id="login-close-btn" type="button" class="secondary login-close-btn" aria-label="关闭登录窗口">×</button>
+      <header class="login-head">
+        <h1 id="login-title">验证码登录</h1>
+        <p id="login-description">无需记忆密码，使用邮箱验证码快捷登录</p>
+      </header>
+
+      <div id="login-mode-switch" class="login-mode-switch" role="tablist" aria-label="登录方式切换">
+        <button id="login-mode-code" type="button" class="login-mode-btn is-active" role="tab" aria-selected="true">验证码登录</button>
+        <button id="login-mode-password" type="button" class="login-mode-btn" role="tab" aria-selected="false">邮箱密码</button>
+        <button id="login-mode-setup" type="button" class="login-mode-btn" role="tab" aria-selected="false">设置密码</button>
+      </div>
+
+      <form id="login-form" class="login-form" novalidate>
+        <label class="login-field">
+          <span>邮箱地址</span>
+          <div class="login-input-wrap">
+            <span class="login-mail-icon">✉</span>
+            <input id="login-email" type="email" placeholder="your-email@example.com" autocomplete="email">
+          </div>
+        </label>
+
+        <label id="login-code-field" class="login-field is-hidden">
+          <span>验证码</span>
+          <input id="login-code" type="text" placeholder="输入6位验证码" maxlength="6" inputmode="numeric">
+        </label>
+
+        <label id="login-password-field" class="login-field is-hidden">
+          <span>登录密码</span>
+          <div class="login-input-wrap">
+            <span class="login-lock-icon">🔒</span>
+            <input id="login-password" type="password" placeholder="输入邮箱密码" autocomplete="current-password">
+          </div>
+        </label>
+
+        <label id="login-new-password-field" class="login-field is-hidden">
+          <span>新密码</span>
+          <div class="login-input-wrap">
+            <span class="login-lock-icon">🔑</span>
+            <input id="login-new-password" type="password" placeholder="至少 6 位，建议包含字母和数字" autocomplete="new-password">
+          </div>
+        </label>
+
+        <label id="login-confirm-password-field" class="login-field is-hidden">
+          <span>确认密码</span>
+          <div class="login-input-wrap">
+            <span class="login-lock-icon">🔐</span>
+            <input id="login-confirm-password" type="password" placeholder="再次输入新密码" autocomplete="new-password">
+          </div>
+        </label>
+
+        <div id="login-message" class="login-message is-hidden" role="status" aria-live="polite"></div>
+
+        <div class="login-actions">
+          <button id="login-send-btn" type="button">发送验证码</button>
+          <div id="login-auth-actions" class="is-hidden">
+            <button id="login-submit-btn" type="submit">确认登录</button>
+            <button id="login-resend-btn" type="button" class="secondary">没有收到？重新发送</button>
+          </div>
+        </div>
+      </form>
+
+      <footer id="login-footnote" class="login-footnote">未注册的邮箱将自动创建账号</footer>
+    </section>
+  </section>
+
+  <main id="main-app" class="app">
     <header class="app-header">
-      <h1>24h浠诲姟鏁堢巼鐪嬫澘</h1>
-      <p>鎸夋椂闂磋褰曚换鍔★紝娓呮櫚鐪嬪埌姣忓ぉ姣忎竴娈垫椂闂撮兘鍦ㄥ仛浠€涔堛€?/p>
+      <h1>24h任务效率看板</h1>
+      <p>按时间记录任务，清晰看到每天每一段时间都在做什么。</p>
     </header>
 
     <section class="panel form-panel">
-      <h2>鏂板缓 / 缂栬緫浠诲姟</h2>
+      <h2>新建任务</h2>
       <form id="task-form" novalidate>
         <input type="hidden" id="task-id">
 
         <label>
-          浠诲姟鍚嶇О
-          <input id="task-name" type="text" maxlength="50" placeholder="渚嬪锛氬畬鎴愰渶姹傝瘎瀹? required>
+          任务名称
+          <input id="task-name" type="text" maxlength="50" placeholder="例如：完成需求评审" required>
         </label>
 
-        <label>
-          浠诲姟鏍囩锛堝洓璞￠檺锛?          <select id="task-priority" required>
-            <option value="important_urgent">&#x1F525; &#37325;&#35201;&#19988;&#32039;&#24613;</option>
-            <option value="important_not_urgent">&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
-            <option value="not_important_urgent">&#x26A1; &#19981;&#37325;&#35201;&#20294;&#32039;&#24613;</option>
-            <option value="not_important_not_urgent">&#x1F9CA; &#19981;&#37325;&#35201;&#20063;&#19981;&#32039;&#24613;</option>
-          </select>
-          <div id="task-importance-wrapper" class="importance-level-group is-hidden">
-            <span class="importance-level-label">&#37325;&#35201;&#31243;&#24230;</span>
-            <div class="importance-level-options" role="radiogroup" aria-label="importance-levels">
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level1"><span>1&#32423;</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level2" checked><span>2&#32423;</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level3"><span>3&#32423;</span></label>
-              <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4&#32423;</span></label>
+        <div class="two-col task-tag-row">
+          <label>
+            任务标签（四象限）
+            <select id="task-priority" required>
+              <option value="important_urgent">&#x1F525; &#37325;&#35201;&#19988;&#32039;&#24613;</option>
+              <option value="important_not_urgent" selected>&#x1F3AF; &#37325;&#35201;&#19981;&#32039;&#24613;</option>
+              <option value="not_important_urgent">&#x26A1; &#19981;&#37325;&#35201;&#20294;&#32039;&#24613;</option>
+              <option value="not_important_not_urgent">&#x1F9CA; &#19981;&#37325;&#35201;&#20063;&#19981;&#32039;&#24613;</option>
+            </select>
+            <div id="task-importance-wrapper" class="importance-level-group is-hidden">
+              <span class="importance-level-label">重要程度</span>
+              <div class="importance-level-options" role="radiogroup" aria-label="importance-levels">
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level1"><span>1级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level2" checked><span>2级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level3"><span>3级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-importance-level" value="level4"><span>4级</span></label>
+              </div>
+            </div>
+            <div id="task-urgent-wrapper" class="importance-level-group is-hidden">
+              <span class="importance-level-label">紧急程度</span>
+              <div class="importance-level-options" role="radiogroup" aria-label="urgent-levels">
+                <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent1"><span>1级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent2"><span>2级</span></label>
+                <label class="importance-level-item"><input type="radio" name="task-urgent-level" value="urgent3" checked><span>3级</span></label>
+              </div>
+            </div>
+          </label>
+
+          <div class="optional-tags-panel" aria-label="状态与过程（选填）">
+            <div class="optional-tags-grid">
+              <div class="optional-tag-field">
+                <span class="optional-tag-title">状态</span>
+                <select id="task-mood" aria-label="状态（选填）">
+                  <option value="" selected>（选填）</option>
+                  <option value="excited">🤩 兴奋</option>
+                  <option value="relaxed">😌 轻松</option>
+                  <option value="okay">🙂 尚可</option>
+                  <option value="tired">😫 疲惫</option>
+                  <option value="painful">😖 痛苦</option>
+                </select>
+              </div>
+              <div class="optional-tag-field">
+                <span class="optional-tag-title">过程</span>
+                <select id="task-process" aria-label="过程（选填）">
+                  <option value="" selected>（选填）</option>
+                  <option value="very_smooth">😄 很顺</option>
+                  <option value="fairly_smooth">🙂 较顺</option>
+                  <option value="normal">😐 一般</option>
+                  <option value="fairly_unsmooth">😣 较差</option>
+                  <option value="very_unsmooth">😭 很差</option>
+                </select>
+              </div>
             </div>
           </div>
-        </label>
-
-        <label>
-          浠诲姟璇︽儏锛?00瀛椾互鍐咃級
-          <textarea id="task-detail" maxlength="200" rows="3" placeholder="绠€瑕佹弿杩扮洰鏍囥€佽緭鍑哄拰闄愬埗鏉′欢"></textarea>
-          <small id="detail-count">0/200</small>
-        </label>
-
-        <div class="two-col">
-          <label>
-            寮€濮嬫椂闂?            <input id="task-start" type="datetime-local" required>
-          </label>
-          <label>
-            缁撴潫鏃堕棿
-            <input id="task-end" type="datetime-local" required>
-          </label>
         </div>
+
+        <label class="task-detail-field">
+          <span class="field-label-inline">
+            <span>任务详情（选填）</span>
+            <small id="detail-count">0/500</small>
+          </span>
+          <textarea id="task-detail" maxlength="500" rows="5" placeholder="简要描述目标、输出和限制条件"></textarea>
+        </label>
+
+        <section class="task-session-block" aria-label="任务时段">
+          <div class="task-session-head">
+            <span class="task-session-title">任务时段（可多次）</span>
+            <button id="add-task-session" type="button" class="secondary task-session-add-btn">+ 新增一次</button>
+          </div>
+          <div id="task-session-list" class="task-session-list"></div>
+        </section>
 
         <div class="two-col">
           <div class="category-group">
-            <span class="group-label">浠诲姟绫诲埆锛堝彲澶氶€夛級</span>
+            <div class="category-group-head">
+              <span class="group-label">任务类别（可多选）</span>
+              <button type="button" id="open-category-manager-form" class="secondary category-manage-trigger">管理类别与颜色</button>
+            </div>
             <details id="task-category-picker" class="category-picker">
               <summary id="task-category-summary" class="category-summary is-empty">请选择任务类别</summary>
-              <div class="category-checklist" id="task-category-group">
-                <label class="category-item"><input type="checkbox" name="task-categories" value="work"><span>&#x1F4BC; &#24037;&#20316;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="explore"><span>&#x1F6A2; &#25506;&#32034;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="topic"><span>&#x1F4DA; &#35838;&#39064;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="dev"><span>&#x1F4BB; &#24320;&#21457;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="entertainment"><span>&#x1F3AE; &#23089;&#20048;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="relax"><span>&#x1F9D8; &#25918;&#26494;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="sleep"><span>&#x1F634; &#30561;&#35273;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="meal"><span>&#x1F37D; &#29992;&#39184;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="record"><span>&#x1F4DD; &#35760;&#24405;</span></label>
-                <label class="category-item"><input type="checkbox" name="task-categories" value="other"><span>&#x1F9E9; &#20854;&#20182;</span></label>
-              </div>
+              <div class="category-checklist" id="task-category-group"></div>
+              <section id="task-category-allocation-panel" class="task-category-allocation-panel is-hidden" aria-live="polite">
+                <div class="task-category-allocation-head">
+                  <span class="task-category-allocation-title">类别时长分配（分钟）</span>
+                  <span id="task-category-allocation-caption" class="task-category-allocation-caption">多选时请填写各类别分配分钟数</span>
+                </div>
+                <div id="task-category-allocation-list" class="task-category-allocation-list"></div>
+                <section id="task-category-sequence-panel" class="task-category-sequence-panel is-hidden" aria-live="polite">
+                  <div class="task-category-sequence-head">
+                    <span class="task-category-sequence-title">类别时序分段（可重复）</span>
+                    <label class="task-category-sequence-toggle">
+                      <input id="task-category-sequence-toggle" type="checkbox" aria-label="启用类别时序分段">
+                      <span>启用</span>
+                    </label>
+                    <span id="task-category-sequence-caption" class="task-category-sequence-caption">可将同一类别拆成多段，按顺序填写每段分钟数</span>
+                  </div>
+                  <div id="task-category-sequence-body" class="task-category-sequence-body">
+                    <div id="task-category-sequence-list" class="task-category-sequence-list" aria-label="类别时序分段列表"></div>
+                    <div class="task-category-sequence-actions">
+                      <button type="button" id="task-category-sequence-add" class="secondary task-category-sequence-add-btn">+ 新增分段</button>
+                    </div>
+                    <p id="task-category-sequence-note" class="task-category-sequence-note">说明：同一类别可重复出现，多段分钟数会按填写顺序累计。</p>
+                  </div>
+                </section>
+              </section>
             </details>
           </div>
 
-          <label>
-            鐘舵€?            <select id="task-status" required>
-              <option value="todo">馃晵 鏈紑濮?/option>
-              <option value="doing">馃殌 杩涜涓?/option>
-              <option value="done">鉁?宸插畬鎴?/option>
-            </select>
-          </label>
+          <div class="task-form-side-panel">
+            <label>
+              任务状态
+              <select id="task-status" required>
+                <option value="todo">🕓 未开始</option>
+                <option value="doing">⏳ 进行中</option>
+                <option value="done">✅ 已完成</option>
+              </select>
+            </label>
+
+            <section id="task-subcategory-panel" class="task-subcategory-panel is-hidden" aria-live="polite">
+              <div class="task-subcategory-head">
+                <span class="task-subcategory-title">关联小类</span>
+                <span id="task-subcategory-caption" class="task-subcategory-caption">选择上方 5 大类后显示</span>
+              </div>
+              <div id="task-subcategory-groups" class="task-subcategory-groups"></div>
+            </section>
+          </div>
         </div>
 
-        <p class="duration-preview">鎬荤敤鏃讹細<strong id="duration-preview">--</strong></p>
+        <p class="duration-preview">总用时：<strong id="duration-preview">--</strong></p>
 
         <div class="actions">
-          <button type="submit">淇濆瓨浠诲姟</button>
-          <button type="button" id="reset-form" class="secondary">閲嶇疆</button>
+          <button type="submit">保存任务</button>
+          <button type="button" id="reset-form" class="secondary">重置</button>
         </div>
       </form>
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h2>姣忔棩24h鍒嗛厤</h2>
+        <h2>每日24h分配</h2>
         <div class="head-tools">
-          <div class="view-switch" role="group" aria-label="鍒嗛厤灞曠ず鏂瑰紡">
-            <button type="button" id="view-timeline" class="switch-btn is-active">鏃堕棿鍒囩墖鍥?/button>
-            <button type="button" id="view-pie" class="switch-btn">楗煎浘瑙嗗浘</button>
+          <div id="allocation-mode-switch" class="view-switch" role="group" aria-label="分配时间范围">
+            <button type="button" id="mode-day" class="switch-btn is-active">天</button>
+            <button type="button" id="mode-week" class="switch-btn">周</button>
+            <button type="button" id="mode-month" class="switch-btn">月</button>
+            <button type="button" id="mode-quarter" class="switch-btn">季</button>
           </div>
-          <label>
-            鏌ョ湅鏃ユ湡
-            <input id="selected-date" type="date">
-          </label>
+          <div id="allocation-date-container" class="allocation-date-container">
+            <input id="selected-date" type="date" aria-label="查看日期">
+            <div id="allocation-period-control" class="period-control is-hidden">
+              <button id="allocation-prev-period-btn" type="button" class="secondary icon-btn">&lt;</button>
+              <span id="selected-week" class="selected-week">第--周</span>
+              <button id="allocation-next-period-btn" type="button" class="secondary icon-btn">&gt;</button>
+            </div>
+          </div>
         </div>
       </div>
 
       <div class="summary-row">
         <div class="summary-item">
-          <span>宸茶褰曟椂闀?/span>
+          <span>已记录时长</span>
           <strong id="summary-used">0h 0m</strong>
         </div>
         <div class="summary-item">
-          <span>绌轰綑鏃堕暱</span>
+          <span>空余时长</span>
           <strong id="summary-free">24h 0m</strong>
         </div>
       </div>
 
+      <div id="week-wrapper" class="week-wrapper is-hidden">
+        <div id="week-bars" class="week-bars"></div>
+      </div>
       <div id="timeline" class="timeline"></div>
       <div id="timeline-legend" class="legend"></div>
-      <div id="pie-wrapper" class="pie-wrapper is-hidden">
-        <div class="pie-chart-wrap">
-          <div id="task-pie" class="task-pie"></div>
-          <div id="task-pie-center" class="task-pie-center">0%</div>
-          <div id="pie-tooltip" class="pie-tooltip is-hidden"></div>
-        </div>
-        <div id="pie-legend" class="pie-legend"></div>
-      </div>
     </section>
 
     <section class="panel">
       <div class="panel-head">
-        <h2>浠诲姟鐪嬫澘</h2>
-        <label>
-          鏌ョ湅鏃ユ湡
-          <input id="board-date" type="date">
-        </label>
+        <h2>任务看板</h2>
+        <label><input id="board-date" type="date" aria-label="查看日期"></label>
       </div>
 
       <div class="board">
         <div class="column">
           <h3 class="column-head">
-            <span class="column-title">馃晵 鏈紑濮?/span>
+            <span class="column-title">🕓 未开始</span>
             <span id="count-todo" class="column-count">0</span>
           </h3>
           <div id="col-todo" class="card-list"></div>
-          <button type="button" class="column-add secondary" data-quick-status="todo" aria-label="鍦ㄦ湭寮€濮嬩腑鏂板浠诲姟">+</button>
+          <button type="button" class="column-add secondary" data-quick-status="todo" aria-label="在未开始中新增任务">+</button>
         </div>
 
         <div class="column">
           <h3 class="column-head">
-            <span class="column-title">馃殌 杩涜涓?/span>
+            <span class="column-title">⏳ 进行中</span>
             <span id="count-doing" class="column-count">0</span>
           </h3>
           <div id="col-doing" class="card-list"></div>
-          <button type="button" class="column-add secondary" data-quick-status="doing" aria-label="鍦ㄨ繘琛屼腑涓柊澧炰换鍔?>+</button>
+          <button type="button" class="column-add secondary" data-quick-status="doing" aria-label="在进行中新增任务">+</button>
         </div>
 
         <div class="column">
           <h3 class="column-head">
-            <span class="column-title">鉁?宸插畬鎴?/span>
+            <span class="column-title">✅ 已完成</span>
             <span id="count-done" class="column-count">0</span>
           </h3>
           <div id="col-done" class="card-list"></div>
-          <button type="button" class="column-add secondary" data-quick-status="done" aria-label="鍦ㄥ凡瀹屾垚涓柊澧炰换鍔?>+</button>
+          <button type="button" class="column-add secondary" data-quick-status="done" aria-label="在已完成中新增任务">+</button>
         </div>
       </div>
     </section>
   </main>
 
-  <template id="task-card-template">
+  <section id="bedtime-review-page" class="app bedtime-review-page is-hidden" aria-hidden="true">
+    <header class="app-header bedtime-review-header">
+      <h1>睡前回顾</h1>
+      <p>按时间分类回顾：紧急且重要、重要不紧急（1级），以及过程较差/很差的任务。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>回顾范围</h2>
+        <div class="head-tools bedtime-review-week-tools">
+          <div class="period-control">
+            <button id="bedtime-review-prev-week-btn" type="button" class="secondary icon-btn">&lt;</button>
+            <span id="bedtime-review-week-display" class="selected-week">第--周</span>
+            <button id="bedtime-review-next-week-btn" type="button" class="secondary icon-btn">&gt;</button>
+          </div>
+          <button id="bedtime-review-back-btn" type="button" class="secondary">返回看板</button>
+        </div>
+      </div>
+      <div id="bedtime-review-summary" class="summary-row"></div>
+      <div id="bedtime-review-groups" class="bedtime-review-groups"></div>
+    </section>
+  </section>
+
+  <section id="task-category-page" class="app task-category-page is-hidden" aria-hidden="true">
+    <header class="app-header task-category-header">
+      <h1>任务分类</h1>
+      <p>按天或按周查看你的 8 个重点任务大类，卡片数据与“每日24h分配”保持同步。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>牛仔很忙</h2>
+        <div class="head-tools task-category-tools">
+          <div id="task-category-mode-switch" class="view-switch" role="group" aria-label="分类投入时间范围">
+            <button type="button" id="task-category-mode-day" class="switch-btn is-active">天</button>
+            <button type="button" id="task-category-mode-week" class="switch-btn">周</button>
+          </div>
+          <div id="task-category-page-date-label">
+            <input id="task-category-page-date" type="date" aria-label="查看日期">
+            <div id="task-category-period-control" class="period-control is-hidden">
+              <button id="task-category-prev-week-btn" type="button" class="secondary icon-btn" aria-label="查看上一周">&lt;</button>
+              <span id="task-category-selected-week" class="selected-week">第--周</span>
+              <button id="task-category-next-week-btn" type="button" class="secondary icon-btn" aria-label="查看下一周">&gt;</button>
+            </div>
+          </div>
+          <button id="task-category-page-back-btn" type="button" class="secondary">返回看板</button>
+        </div>
+      </div>
+      <div id="task-category-page-summary" class="summary-row"></div>
+      <div id="task-category-page-cards" class="task-category-cards"></div>
+    </section>
+  </section>
+
+  <section id="trash-page" class="app trash-page is-hidden" aria-hidden="true">
+    <header class="app-header trash-page-header">
+      <h1>回收站</h1>
+      <p>删除后的任务会先进入回收站，7 天后自动永久清除。</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>已删除任务</h2>
+        <div class="head-tools trash-tools">
+          <button id="trash-selection-toggle-btn" type="button" class="secondary">批量管理</button>
+          <button id="trash-page-back-btn" type="button" class="secondary">返回看板</button>
+        </div>
+      </div>
+      <div id="trash-page-summary" class="summary-row"></div>
+      <div id="trash-page-list" class="trash-list"></div>
+      <p id="trash-page-footnote" class="trash-footnote">项目将在删除 7 天后自动永久清除</p>
+    </section>
+
+    <div id="trash-batch-bar" class="trash-batch-bar is-hidden">
+      <div class="trash-batch-content">
+        <span id="trash-batch-count" class="trash-batch-count">已选 0 项</span>
+        <button id="trash-batch-restore-btn" type="button" class="secondary">恢复</button>
+        <button id="trash-batch-delete-btn" type="button" class="danger">彻底删除</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="category-manager-modal" class="category-manager-modal is-hidden" aria-hidden="true">
+    <div id="category-manager-dialog" class="category-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
+      <div class="category-manager-head">
+        <h3 id="category-manager-title">任务类别管理</h3>
+        <button type="button" id="close-category-manager-btn" class="secondary">关闭</button>
+      </div>
+      <p class="category-manager-note">可新增/删除类别，并设置其在“每日24h分配”中的颜色。</p>
+      <div id="category-manager-list" class="category-manager-list"></div>
+      <div class="category-manager-actions">
+        <button type="button" id="add-category-btn" class="secondary">新增类别</button>
+      </div>
+    </div>
+  </div>
+
+    <template id="task-card-template">
     <article class="task-card is-collapsed">
       <div class="task-card-head">
         <div class="card-title-wrap">
           <h4 class="card-title"></h4>
           <span class="card-time-range"></span>
         </div>
-        <button type="button" class="card-toggle secondary" aria-expanded="false">灞曞紑</button>
+        <button type="button" class="card-toggle secondary" aria-expanded="false">展开</button>
       </div>
-      <p class="pill priority-pill"></p>
+      <div class="pill-row">
+        <p class="pill priority-pill"></p>
+        <p class="pill mood-pill"></p>
+        <p class="pill process-pill"></p>
+      </div>
       <p class="card-detail"></p>
       <div class="card-extra">
-        <p class="card-line"><span>寮€濮嬶細</span><span class="card-start"></span></p>
-        <p class="card-line"><span>缁撴潫锛?/span><span class="card-end"></span></p>
-        <p class="card-line"><span>鎬荤敤鏃讹細</span><span class="card-duration"></span></p>
-        <p class="card-line"><span>绫诲埆锛?/span><span class="card-category"></span></p>
+        <p class="card-line"><span>开始：</span><span class="card-start"></span></p>
+        <p class="card-line"><span>结束：</span><span class="card-end"></span></p>
+        <p class="card-line"><span>总用时：</span><span class="card-duration"></span></p>
+        <p class="card-line"><span>类别：</span><span class="card-category"></span></p>
         <label class="card-line">
-          <span>鐘舵€侊細</span>
+          <span>状态：</span>
           <select class="card-status">
-            <option value="todo">馃晵 鏈紑濮?/option>
-            <option value="doing">馃殌 杩涜涓?/option>
-            <option value="done">鉁?宸插畬鎴?/option>
+            <option value="todo">🕓 未开始</option>
+            <option value="doing">⏳ 进行中</option>
+            <option value="done">✅ 已完成</option>
           </select>
         </label>
         <div class="card-actions">
-          <button class="card-edit secondary">缂栬緫</button>
-          <button class="card-delete danger">鍒犻櫎</button>
+          <button class="card-edit secondary">编辑</button>
+          <button class="card-delete danger">删除</button>
         </div>
       </div>
     </article>
-  </template>
+    </template>
 
-  <script src="app.js"></script>
+    <template id="task-session-row-template">
+      <div class="task-session-row">
+        <span class="task-session-index">第1次</span>
+        <label class="task-session-field">
+          <span>开始时间</span>
+          <input class="task-session-start" type="datetime-local" required>
+        </label>
+        <label class="task-session-field">
+          <span>结束时间</span>
+          <input class="task-session-end" type="datetime-local" required>
+        </label>
+        <button type="button" class="secondary task-session-remove-btn">删除</button>
+      </div>
+    </template>
+
+  <canvas id="completion-confetti-canvas" aria-hidden="true"></canvas>
+  <audio id="fixed-task-completion-sound" src="sounds/completion-fixed.wav" preload="auto"></audio>
+  <audio id="random-task-completion-sound" preload="auto"></audio>
+
+  <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
+  <script src="app.js?v=20260317-03"></script>
 </body>
 </html>

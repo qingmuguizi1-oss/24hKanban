@@ -1,0 +1,21 @@
+# Normalize text files; keep binaries untouched.
+* text=auto
+
+*.js   text
+*.css  text
+*.html text
+*.md   text
+*.txt  text
+*.json text
+*.yml  text
+*.yaml text
+*.ps1  text
+*.sh   text
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.wav  binary

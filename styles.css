@@ -324,8 +324,36 @@ small {
   align-items: start;
 }
 
-.task-tag-row > label:last-child {
+.task-tag-row > :last-child {
   gap: 6px;
+}
+
+.optional-tags-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.93rem;
+  color: #614734;
+}
+
+.optional-tags-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.optional-tag-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.optional-tag-title {
+  font-weight: 600;
+  font-size: 0.93rem;
+  color: #614734;
 }
 
 .optional-tag-switch {
@@ -369,7 +397,7 @@ small {
 
 .mood-input-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 

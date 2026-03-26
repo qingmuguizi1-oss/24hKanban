@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required for UTF-8 guard, but was not found in PATH." >&2
+  exit 1
+fi
+
+git diff --cached --name-only --diff-filter=ACMRTUXB -z | node scripts/check-utf8.js --stdin-null --strict-suspicious

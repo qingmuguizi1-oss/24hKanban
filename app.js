@@ -1,4 +1,4 @@
-﻿const STORAGE_KEY = "time-efficiency-tasks-v1";
+const STORAGE_KEY = "time-efficiency-tasks-v1";
 const TASKS_LAST_LOCAL_MUTATION_AT_STORAGE_KEY = "time-efficiency-tasks-last-local-mutation-at-v1";
 const TASK_FORM_DRAFT_STORAGE_KEY = "time-efficiency-task-form-draft-v1";
 const CATEGORY_DEFINITIONS_STORAGE_KEY = "time-efficiency-category-definitions-v1";
@@ -1624,7 +1624,7 @@ function buildCloudSyncFailureHint(error) {
     return "";
   }
 
-  return `CloudBase 鍙兘鍙戠敓璺ㄥ煙鎷︽埅锛岃鍦ㄤ簯寮€鍙戞帶鍒跺彴灏嗗綋鍓嶅煙鍚嶅姞鍏?Web 瀹夊叏鍩熷悕锛?{window.location.origin}`;
+  return `CloudBase 可能发生跨域拦截，请在云开发控制台将当前域名加入 Web 安全域名：${window.location.origin}`;
 }
 
 function getUpdatedCountFromUpdateResult(result) {
@@ -2281,16 +2281,16 @@ function createTaskSessionRow(session = {}) {
     row = document.createElement("div");
     row.className = "task-session-row";
     row.innerHTML = `
-      <span class="task-session-index">绗?娆?/span>
+      <span class="task-session-index">第1次</span>
       <label class="task-session-field">
-        <span>寮€濮嬫椂闂?/span>
+        <span>开始时间</span>
         <input class="task-session-start" type="datetime-local" required>
       </label>
       <label class="task-session-field">
-        <span>缁撴潫鏃堕棿</span>
+        <span>结束时间</span>
         <input class="task-session-end" type="datetime-local" required>
       </label>
-      <button type="button" class="secondary task-session-remove-btn">鍒犻櫎</button>
+      <button type="button" class="secondary task-session-remove-btn">删除</button>
     `;
   }
 
@@ -4135,7 +4135,7 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
   }
 
   if (!isCategoryPickerOpen) {
-    refs.taskSubcategoryCaption.textContent = "灞曞紑鈥滀换鍔＄被鍒€濆悗鏄剧ず";
+    refs.taskSubcategoryCaption.textContent = "展开“任务类别”后显示";
     return;
   }
 
@@ -4205,7 +4205,7 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
 
         const blockTitle = document.createElement("div");
         blockTitle.className = "task-subdetail-title";
-        blockTitle.textContent = `${option.label} 路 缁嗗垎`;
+        blockTitle.textContent = `${option.label} · 细分`;
 
         const chips = document.createElement("div");
         chips.className = "task-subdetail-chip-wrap";
@@ -4249,12 +4249,12 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
         );
 
         if (selectedSubcategoryOptions.length === 1) {
-          caption.textContent = `鍗曚釜灏忕被鑷姩鍒嗛厤 ${formatDuration(latestDraft.total)}`;
+          caption.textContent = `单个小类自动分配 ${formatDuration(latestDraft.total)}`;
           applyAllocationCaptionStatusClass(caption, "ok");
           return;
         }
         if (latestDraft.remaining === 0) {
-          caption.textContent = `灏忕被宸插垎閰嶅畬鎴愶細${formatDuration(latestDraft.sum)} / ${formatDuration(latestDraft.total)}`;
+          caption.textContent = `小类已分配完成：${formatDuration(latestDraft.sum)} / ${formatDuration(latestDraft.total)}`;
           applyAllocationCaptionStatusClass(caption, "ok");
           return;
         }
@@ -4263,7 +4263,7 @@ function renderTaskSubcategoryPanel(selectedKeys = getSelectedCategoriesFromForm
           applyAllocationCaptionStatusClass(caption, "warn");
           return;
         }
-        caption.textContent = `灏忕被瓒呭嚭 ${formatDuration(Math.abs(latestDraft.remaining))}锛岃璋冨洖 ${formatDuration(latestDraft.total)}`;
+        caption.textContent = `小类超出 ${formatDuration(Math.abs(latestDraft.remaining))}，请调回 ${formatDuration(latestDraft.total)}`;
         applyAllocationCaptionStatusClass(caption, "error");
       };
       updateCaption();
@@ -4383,7 +4383,7 @@ function normalizeTaskCategorySubcategoryDetails(subcategoryKey, details, fallba
     if (!item || typeof item !== "object") {
       return;
     }
-    const label = normalizeCategoryLabel(item.label, `缁嗗垎${index + 1}`);
+    const label = normalizeCategoryLabel(item.label, `细分${index + 1}`);
     const seed = item.key || `${subcategoryKey}_${label}`;
     let key = normalizeCategoryKey(seed) || `${normalizeCategoryKey(subcategoryKey) || "detail"}_detail_${index + 1}`;
     let duplicateIndex = 1;
@@ -4811,7 +4811,7 @@ function renderCategoryManager() {
     colorInput.type = "color";
     colorInput.className = "category-manager-color";
     colorInput.value = normalizeCategoryColor(definition.color, DEFAULT_CATEGORY_COLOR);
-    colorInput.title = "绫诲埆棰滆壊";
+    colorInput.title = "类别颜色";
     colorInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { color: colorInput.value }, { skipManagerRerender: true });
     });
@@ -4821,7 +4821,7 @@ function renderCategoryManager() {
     nameInput.className = "category-manager-name";
     nameInput.maxLength = 24;
     nameInput.value = definition.label;
-    nameInput.placeholder = "绫诲埆鍚嶇О";
+    nameInput.placeholder = "类别名称";
     nameInput.addEventListener("change", () => {
       updateCategoryDefinition(definition.key, { label: nameInput.value }, { skipManagerRerender: true });
     });
@@ -4833,8 +4833,8 @@ function renderCategoryManager() {
     const dragHandle = document.createElement("button");
     dragHandle.type = "button";
     dragHandle.className = "category-manager-drag-handle";
-    dragHandle.textContent = "鎷栨嫿";
-    dragHandle.title = "鎷栨嫿鎺掑簭";
+    dragHandle.textContent = "拖拽";
+    dragHandle.title = "拖拽排序";
     dragHandle.setAttribute("draggable", "true");
     dragHandle.addEventListener("dragstart", (event) => {
       state.draggingCategoryKey = definition.key;
@@ -4857,7 +4857,7 @@ function renderCategoryManager() {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "danger category-manager-delete";
-    deleteBtn.textContent = "鍒犻櫎";
+    deleteBtn.textContent = "删除";
     deleteBtn.addEventListener("click", () => {
       deleteCategoryDefinition(definition.key);
     });
@@ -6996,7 +6996,7 @@ function addTaskCategorySubcategoryDetail(groupKey, subcategoryKey) {
   }
 
   const details = Array.isArray(target.details) ? target.details : [];
-  const label = `鏂扮粏鍒?{details.length + 1}`;
+  const label = `新细分${details.length + 1}`;
   details.push({
     key: createUniqueTaskCategorySubcategoryDetailKey(groupKey, subcategoryKey, label, details),
     label
@@ -8047,7 +8047,7 @@ function computeRangeStats(targetRange) {
   };
 }
 
-function renderWeekBars(categoryRanking, emptyText = "鏈懆鏆傛棤绫诲埆鏃堕暱鍒嗛厤璁板綍") {
+function renderWeekBars(categoryRanking, emptyText = "本周暂无类别时长分配记录") {
   if (!refs.weekBars) {
     return;
   }
@@ -8096,7 +8096,7 @@ function renderWeekBars(categoryRanking, emptyText = "鏈懆鏆傛棤绫诲�
     item.appendChild(track);
     item.appendChild(hourText);
     item.appendChild(categoryLabel);
-    item.title = `${category.label} | 鎬绘椂闀?${formatDuration(category.minutes)} | 鎺掑悕 #${index + 1}`;
+    item.title = `${category.label} | 总时长 ${formatDuration(category.minutes)} | 排名 #${index + 1}`;
 
     refs.weekBars.appendChild(item);
   });

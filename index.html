@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -121,7 +121,7 @@
     </header>
 
     <section class="panel form-panel">
-      <h2>新建 / 编辑任务</h2>
+      <h2>新建任务</h2>
       <form id="task-form" novalidate>
         <input type="hidden" id="task-id">
 
@@ -158,34 +158,32 @@
             </div>
           </label>
 
-          <label>
-            <div id="optional-tag-switch" class="optional-tag-switch" role="group" aria-label="状态标签类型切换">
-              <button id="switch-mood" type="button" class="optional-tag-switch-btn is-active">状态</button>
-              <button id="switch-process" type="button" class="optional-tag-switch-btn">过程</button>
+          <div class="optional-tags-panel" aria-label="状态与过程（选填）">
+            <div class="optional-tags-grid">
+              <div class="optional-tag-field">
+                <span class="optional-tag-title">状态</span>
+                <select id="task-mood" aria-label="状态（选填）">
+                  <option value="" selected>（选填）</option>
+                  <option value="excited">🤩 兴奋</option>
+                  <option value="relaxed">😌 轻松</option>
+                  <option value="okay">🙂 尚可</option>
+                  <option value="tired">😫 疲惫</option>
+                  <option value="painful">😖 痛苦</option>
+                </select>
+              </div>
+              <div class="optional-tag-field">
+                <span class="optional-tag-title">过程</span>
+                <select id="task-process" aria-label="过程（选填）">
+                  <option value="" selected>（选填）</option>
+                  <option value="very_smooth">😄 很顺</option>
+                  <option value="fairly_smooth">🙂 较顺</option>
+                  <option value="normal">😐 一般</option>
+                  <option value="fairly_unsmooth">😣 较差</option>
+                  <option value="very_unsmooth">😭 很差</option>
+                </select>
+              </div>
             </div>
-            <div id="panel-mood" class="mood-input-row">
-              <select id="task-mood">
-                <option value="" selected>（选填）</option>
-                <option value="excited">🤩 兴奋</option>
-                <option value="relaxed">😌 轻松</option>
-                <option value="okay">🙂 尚可</option>
-                <option value="tired">😫 疲惫</option>
-                <option value="painful">😖 痛苦</option>
-              </select>
-              <input id="task-mood-score" type="number" min="0" max="100" step="1" placeholder="____" aria-label="状态/心情分数">
-            </div>
-            <div id="panel-process" class="mood-input-row is-hidden">
-              <select id="task-process">
-                <option value="" selected>（选填）</option>
-                <option value="very_smooth">😄 很顺</option>
-                <option value="fairly_smooth">🙂 较顺</option>
-                <option value="normal">😐 一般</option>
-                <option value="fairly_unsmooth">😣 较差</option>
-                <option value="very_unsmooth">😭 很差</option>
-              </select>
-              <input id="task-process-score" type="number" min="0" max="100" step="1" placeholder="____" aria-label="过程表现分数">
-            </div>
-          </label>
+          </div>
         </div>
 
         <label class="task-detail-field">

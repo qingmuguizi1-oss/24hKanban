@@ -33,3 +33,39 @@
 - `styles.css` 页面样式
 - `app.js` 交互逻辑与数据存储
 
+## UTF-8 防乱码基建
+
+仓库已内置 UTF-8 防护（编辑器 + Git + 提交拦截 + CI）：
+
+- `.editorconfig`：统一使用 UTF-8（无 BOM）与 LF。
+- `.gitattributes`：明确文本/二进制文件类型，避免错误转换。
+- `scripts/check-utf8.js`：检查 UTF-8 非法字节、BOM、常见乱码片段。
+- `.githooks/pre-commit`：提交前仅检查暂存区文件（严格模式，会拦截可疑乱码词形）。
+- `.github/workflows/utf8-guard.yml`：远端 CI 兜底。
+
+### 一次性启用本地 pre-commit
+
+在仓库根目录执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-git-hooks.ps1
+```
+
+### 手动巡检（全仓）
+
+```powershell
+node .\scripts\check-utf8.js
+```
+
+### 手动巡检（仅暂存区，和 pre-commit 一致）
+
+```powershell
+git diff --cached --name-only --diff-filter=ACMRTUXB -z | node .\scripts\check-utf8.js --stdin-null
+```
+
+如需与 pre-commit 同样的严格检查，可加参数：
+
+```powershell
+git diff --cached --name-only --diff-filter=ACMRTUXB -z | node .\scripts\check-utf8.js --stdin-null --strict-suspicious
+```
+
